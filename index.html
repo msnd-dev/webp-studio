@@ -1,1 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebP Studio & Free | プロ仕様・双方向一括変換ツール</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --primary: #38bdf8;
+            --secondary: #fb923c;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --border: #334155;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 95%;
+            max-width: 800px;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .mode-switch {
+            display: inline-flex;
+            background: var(--bg);
+            padding: 5px;
+            border-radius: 50px;
+            margin-bottom: 30px;
+        }
+        .mode-btn {
+            padding: 10px 25px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: 0.3s;
+            border: none;
+            color: #94a3b8;
+            background: none;
+            font-weight: bold;
+        }
+        .mode-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        .mode-btn.active.free {
+            background: var(--secondary);
+        }
+        .drop-zone {
+            border: 3px dashed var(--border);
+            padding: 50px;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .drop-zone:hover {
+            border-color: var(--primary);
+            background: rgba(56, 189, 248, 0.05);
+        }
+        .settings {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            align-items: center;
+        }
+        input[type="number"] {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 5px;
+            width: 60px;
+            border-radius: 5px;
+        }
+        #resultArea {
+            margin-top: 20px;
+            display: none;
+        }
+        .btn-download {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        footer {
+            margin-top: 30px;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <div class="mode-switch">
+        <button id="studioMode" class="mode-btn active">WebP STUDIO (生成)</button>
+        <button id="freeMode" class="mode-btn">WebP FREE (解除)</button>
+    </div>
+
+    <h2 id="title">画像をWebPに凝縮</h2>
+    <p id="desc">設定数値を固定し、大量の画像を一括処理します。</p>
+
+    <div class="settings">
+        <label>画質(Quality): </label>
+        <input type="number" id="quality" value="85" min="1" max="100">
+        <span id="targetFormatLabel" style="display:none;"> ➔ JPGに変換</span>
+    </div>
+
+    <div class="drop-zone" id="dropZone">
+        ここに画像をドロップ（複数可）
+    </div>
+
+    <div id="resultArea">
+        <div id="graphContainer" style="margin-bottom:20px; overflow:hidden;">
+            <div id="reductionBall" style="width:100px; height:100px; background:var(--primary); border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center; font-weight:bold;">
+                <span id="reductionText">70%</span>
+            </div>
+        </div>
+        <p id="statText"></p>
+        <button class="btn-download" id="downloadBtn">ZIPで一括保存</button>
+    </div>
+
+    <footer>
+        &copy; 2026 WebP Studio & Free. All Rights Reserved. <br>
+        サーバーに画像は送信されません。ブラウザ内で安全に処理されます。
+    </footer>
+</div>
+
+<script>
+    // 状態管理
+    let currentMode = 'STUDIO';
+    let processedFiles = [];
+
+    const studioBtn = document.getElementById('studioMode');
+    const freeBtn = document.getElementById('freeMode');
+    const dropZone = document.getElementById('dropZone');
+    const qualityInput = document.getElementById('quality');
+
+    // 設定の記憶（LocalStorage）
+    qualityInput.value = localStorage.getItem('webp_quality') || 85;
+    qualityInput.addEventListener('change', (e) => {
+        localStorage.setItem('webp_quality', e.target.value);
+    });
+
+    // モード切替
+    studioBtn.onclick = () => {
+        currentMode = 'STUDIO';
+        updateUI('#38bdf8', '画像をWebPに凝縮', 'WebP STUDIO (生成)', false);
+    };
+    freeBtn.onclick = () => {
+        currentMode = 'FREE';
+        updateUI('#fb923c', 'WebPの鎖を解放', 'WebP FREE (解除)', true);
+    };
+
+    function updateUI(color, title, btnText, isFree) {
+        document.documentElement.style.setProperty('--primary', color);
+        document.getElementById('title').innerText = title;
+        studioBtn.classList.toggle('active', !isFree);
+        freeBtn.classList.toggle('active', isFree);
+        freeBtn.classList.toggle('free', isFree);
+        document.getElementById('reductionBall').style.backgroundColor = color;
+    }
+
+    // ドラッグ＆ドロップ処理
+    dropZone.ondragover = (e) => { e.preventDefault(); };
+    dropZone.ondrop = async (e) => {
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length === 0) return;
+
+        processedFiles = [];
+        let totalOriginal = 0;
+        let totalNew = 0;
+
+        for (const file of files) {
+            const result = await processImage(file);
+            processedFiles.push(result);
+            totalOriginal += file.size;
+            totalNew += result.blob.size;
+        }
+
+        const reduction = Math.round((1 - totalNew / totalOriginal) * 100);
+        showResult(reduction, totalOriginal, totalNew);
+    };
+
+    async function processImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const format = currentMode === 'STUDIO' ? 'image/webp' : 'image/jpeg';
+                    const ext = currentMode === 'STUDIO' ? '.webp' : '.jpg';
+                    const quality = qualityInput.value / 100;
+                    
+                    canvas.toBlob((blob) => {
+                        resolve({
+                            name: file.name.replace(/\.[^/.]+$/, "") + ext,
+                            blob: blob
+                        });
+                    }, format, quality);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function showResult(reduction, original, newSize) {
+        document.getElementById('resultArea').style.display = 'block';
+        document.getElementById('reductionText').innerText = reduction + "%";
+        document.getElementById('statText').innerText = `合計 ${(original/1024/1024).toFixed(2)}MB ➔ ${(newSize/1024/1024).toFixed(2)}MB に成功！`;
+
+        // 【社長のこだわり】アニメーション
+        if (currentMode === 'STUDIO') {
+            gsap.fromTo("#reductionBall", { scale: 1.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" });
+        } else {
+            gsap.fromTo("#reductionBall", { scale: 0.1, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "power2.out" });
+        }
+    }
+
+    // ZIPダウンロード
+    document.getElementById('downloadBtn').onclick = async () => {
+        const zip = new JSZip();
+        processedFiles.forEach(f => zip.file(f.name, f.blob));
+        const content = await zip.generateAsync({ type: "blob" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(content);
+        link.download = `webp_studio_processed.zip`;
+        link.click();
+    };
+</script>
+
+</body>
+</html>
