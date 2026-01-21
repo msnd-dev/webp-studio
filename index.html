@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Wasm WebP (libwebp) 一括Lossy圧縮ツール</title>
+  <title>Wasm libwebp WebP Lossy 一括圧縮（Squoosh風Compare + Zoom）</title>
   <style>
     :root{
       --bg:#0b0c10; --fg:#e8eaed; --muted:#aeb4bd; --panel:#12141a;
       --line:#2a2f3a; --accent:#7aa2ff; --danger:#ff6b6b; --ok:#66e3a2;
-      --white:#ffffff; --shadow: 0 10px 30px rgba(0,0,0,.25);
+      --shadow: 0 10px 30px rgba(0,0,0,.25);
       --radius:14px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;
@@ -18,123 +18,204 @@
       --line:#e5e8ef; --accent:#2b6cff; --danger:#d43c3c; --ok:#0f9d58;
       --shadow: 0 10px 30px rgba(0,0,0,.08);
     }
-
     *{box-sizing:border-box}
-    body{
-      margin:0; font-family:var(--sans);
-      background:var(--bg); color:var(--fg);
-    }
+    body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--fg);}
     header{
       position:sticky; top:0; z-index:10;
-      background:linear-gradient(to bottom, rgba(0,0,0,.22), rgba(0,0,0,0));
       backdrop-filter:saturate(140%) blur(10px);
+      background:linear-gradient(to bottom, rgba(0,0,0,.22), rgba(0,0,0,0));
       border-bottom:1px solid color-mix(in srgb, var(--line) 60%, transparent);
     }
     [data-theme="FREE"] header{
       background:linear-gradient(to bottom, rgba(255,255,255,.85), rgba(255,255,255,.6));
     }
-    .wrap{max-width:1180px; margin:0 auto; padding:18px 18px 26px}
-    .title-row{display:flex; gap:12px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap}
-    h1{font-size:18px; margin:0; letter-spacing:.2px}
-    .subtitle{margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.4}
+    .wrap{max-width:1180px;margin:0 auto;padding:18px 18px 26px;}
+    .title-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+    h1{font-size:18px;margin:0;letter-spacing:.2px}
+    .subtitle{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.4}
+
     .controls{
-      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
-      padding:10px; border:1px solid var(--line); background:var(--panel);
-      border-radius:var(--radius); box-shadow:var(--shadow);
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+      padding:10px;border:1px solid var(--line);background:var(--panel);
+      border-radius:var(--radius);box-shadow:var(--shadow);
     }
-    .control{display:flex; gap:8px; align-items:center}
-    label{font-size:12px; color:var(--muted)}
+    .control{display:flex;gap:8px;align-items:center}
+    label{font-size:12px;color:var(--muted)}
     input[type="range"]{width:220px}
     input[type="file"]{display:none}
     .btn{
-      appearance:none; border:1px solid var(--line); background:transparent; color:var(--fg);
-      padding:9px 12px; border-radius:12px; cursor:pointer; font-size:12px;
-      display:inline-flex; gap:8px; align-items:center;
+      appearance:none;border:1px solid var(--line);background:transparent;color:var(--fg);
+      padding:9px 12px;border-radius:12px;cursor:pointer;font-size:12px;
+      display:inline-flex;gap:8px;align-items:center;
       transition:transform .05s ease, background .15s ease, border-color .15s ease;
       user-select:none;
     }
-    .btn:hover{background:color-mix(in srgb, var(--panel) 65%, transparent); border-color:color-mix(in srgb, var(--accent) 30%, var(--line))}
+    .btn:hover{background:color-mix(in srgb, var(--panel) 65%, transparent);border-color:color-mix(in srgb, var(--accent) 30%, var(--line))}
     .btn:active{transform:translateY(1px)}
-    .btn.primary{background:color-mix(in srgb, var(--accent) 18%, var(--panel)); border-color:color-mix(in srgb, var(--accent) 40%, var(--line))}
+    .btn.primary{background:color-mix(in srgb, var(--accent) 18%, var(--panel));border-color:color-mix(in srgb, var(--accent) 40%, var(--line))}
     .btn.danger{border-color:color-mix(in srgb, var(--danger) 55%, var(--line))}
-    .pill{
-      font-family:var(--mono); font-size:11px; color:var(--muted);
-      padding:6px 8px; border:1px solid var(--line); border-radius:999px;
-    }
+    .btn:disabled{opacity:.55;cursor:not-allowed}
 
-    .grid{display:grid; gap:14px; grid-template-columns:1.25fr .75fr; margin-top:14px}
+    .pill{font-family:var(--mono);font-size:11px;color:var(--muted);padding:6px 8px;border:1px solid var(--line);border-radius:999px;}
+    .grid{display:grid;gap:14px;grid-template-columns:1.25fr .75fr;margin-top:14px}
     @media (max-width: 980px){.grid{grid-template-columns:1fr}}
 
-    .card{
-      border:1px solid var(--line); background:var(--panel); border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      overflow:hidden;
-    }
-    .card-h{
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-      padding:12px 14px; border-bottom:1px solid var(--line);
-    }
+    .card{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+    .card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);}
     .card-h strong{font-size:13px}
     .card-b{padding:14px}
+
     .drop{
       border:2px dashed color-mix(in srgb, var(--line) 80%, var(--muted));
-      border-radius:16px; padding:18px;
+      border-radius:16px;padding:18px;
       background:linear-gradient(180deg, color-mix(in srgb, var(--panel) 80%, transparent), transparent);
-      display:flex; flex-direction:column; gap:10px; align-items:center; justify-content:center;
-      min-height:150px;
+      display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;
+      min-height:140px;
     }
-    .drop.drag{border-color:color-mix(in srgb, var(--accent) 65%, var(--line)); background:color-mix(in srgb, var(--accent) 10%, var(--panel))}
+    .drop.drag{border-color:color-mix(in srgb, var(--accent) 65%, var(--line));background:color-mix(in srgb, var(--accent) 10%, var(--panel))}
     .drop .big{font-size:13px}
-    .drop .small{font-size:12px; color:var(--muted); text-align:center; line-height:1.5}
+    .drop .small{font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
 
-    .stats{
-      display:grid; grid-template-columns:1fr 1fr; gap:10px;
-    }
-    .stat{
-      border:1px solid var(--line); border-radius:14px; padding:10px 12px; background:color-mix(in srgb, var(--panel) 85%, transparent);
-    }
-    .stat .k{font-size:11px; color:var(--muted)}
-    .stat .v{font-family:var(--mono); font-size:15px; margin-top:6px}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .stat{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:color-mix(in srgb, var(--panel) 85%, transparent);}
+    .stat .k{font-size:11px;color:var(--muted)}
+    .stat .v{font-family:var(--mono);font-size:15px;margin-top:6px}
     .v.ok{color:var(--ok)} .v.bad{color:var(--danger)}
 
-    .list{display:flex; flex-direction:column; gap:10px}
-    .item{
-      border:1px solid var(--line); border-radius:14px; overflow:hidden;
-      background:color-mix(in srgb, var(--panel) 92%, transparent);
-    }
+    .list{display:flex;flex-direction:column;gap:10px}
+    .item{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:color-mix(in srgb, var(--panel) 92%, transparent);}
     .item-h{
-      display:flex; gap:10px; align-items:center; justify-content:space-between;
-      padding:10px 12px; border-bottom:1px solid var(--line);
+      display:flex;gap:10px;align-items:center;justify-content:space-between;
+      padding:10px 12px;border-bottom:1px solid var(--line);
     }
-    .name{font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:68ch}
-    .meta{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+    .name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52ch}
+    .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
     .tag{
-      font-family:var(--mono); font-size:11px; color:var(--muted);
-      padding:4px 7px; border:1px solid var(--line); border-radius:999px;
+      font-family:var(--mono);font-size:11px;color:var(--muted);
+      padding:4px 7px;border:1px solid var(--line);border-radius:999px;
     }
-    .tag.ok{border-color:color-mix(in srgb, var(--ok) 55%, var(--line)); color:color-mix(in srgb, var(--ok) 80%, var(--fg))}
-    .tag.bad{border-color:color-mix(in srgb, var(--danger) 55%, var(--line)); color:color-mix(in srgb, var(--danger) 80%, var(--fg))}
-    .item-b{
-      padding:12px; background:var(--white);
-      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    .tag.ok{border-color:color-mix(in srgb, var(--ok) 55%, var(--line));color:color-mix(in srgb, var(--ok) 80%, var(--fg))}
+    .tag.bad{border-color:color-mix(in srgb, var(--danger) 55%, var(--line));color:color-mix(in srgb, var(--danger) 80%, var(--fg))}
+    .item-b{padding:12px;background:#fff;}
+
+    /* ===== Squoosh風 Compare Viewer ===== */
+    .viewer{
+      position:relative;
+      border:1px solid rgba(0,0,0,.12);
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+      height:420px;
+      user-select:none;
+      touch-action:none; /* pan/zoomを自前で */
     }
-    .preview{
-      border:1px solid rgba(0,0,0,.12); border-radius:12px;
-      background:#fff; overflow:hidden;
+    .viewer .stage{
+      position:absolute; inset:0;
+      overflow:hidden;
+      background:#fff;
     }
-    .preview .ph{
+    .viewer .layer{
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .viewer img{
+      max-width:none;
+      image-rendering:auto;
+      pointer-events:none;
+      -webkit-user-drag:none;
+      user-select:none;
+    }
+    .viewer .afterClip{
+      position:absolute; inset:0;
+      overflow:hidden;
+      pointer-events:none;
+    }
+    .viewer .divider{
+      position:absolute; top:0; bottom:0;
+      width:2px;
+      background:rgba(0,0,0,.45);
+      left:50%;
+      pointer-events:none;
+    }
+    .viewer .knob{
+      position:absolute;
+      left:calc(50% - 16px);
+      top:calc(50% - 16px);
+      width:32px;height:32px;border-radius:999px;
+      background:rgba(0,0,0,.85);
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 8px 20px rgba(0,0,0,.25);
+      pointer-events:none;
+    }
+    .viewer .knob:before{
+      content:"◀ ▶";
+      font-size:11px;
+      color:#fff;
+      letter-spacing:1px;
+      font-family:var(--mono);
+    }
+    .viewer .hud{
+      position:absolute; left:10px; top:10px;
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      padding:8px 10px;
+      background:rgba(255,255,255,.86);
+      border:1px solid rgba(0,0,0,.10);
+      border-radius:12px;
+      backdrop-filter: blur(6px);
+      font-size:11px;
+      color:#111;
+    }
+    .viewer .hud .mono{font-family:var(--mono)}
+    .viewer .hud button{
+      border:1px solid rgba(0,0,0,.15);
+      background:transparent;
+      border-radius:10px;
+      padding:6px 8px;
+      cursor:pointer;
+      font-size:11px;
+    }
+    .viewer .hud button:hover{background:rgba(0,0,0,.04)}
+    .viewer .hint{
+      position:absolute; right:10px; bottom:10px;
+      padding:6px 8px;
+      font-size:11px;
+      color:#111;
+      background:rgba(255,255,255,.80);
+      border:1px solid rgba(0,0,0,.10);
+      border-radius:12px;
+      backdrop-filter: blur(6px);
+    }
+
+    /* Modal for full screen compare */
+    .modal{
+      position:fixed; inset:0; z-index:100;
+      display:none;
+      background:rgba(0,0,0,.55);
+      align-items:center; justify-content:center;
+      padding:18px;
+    }
+    .modal.open{display:flex}
+    .modal .box{
+      width:min(1200px, 100%);
+      height:min(820px, 92vh);
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:0 18px 50px rgba(0,0,0,.35);
+      display:flex; flex-direction:column;
+    }
+    .modal .mh{
       display:flex; align-items:center; justify-content:space-between;
-      padding:7px 9px; font-size:11px; color:#374151; background:#f3f4f6; border-bottom:1px solid rgba(0,0,0,.08);
+      gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
     }
-    .preview img{
-      display:block; width:100%; height:260px; object-fit:contain; background:#fff;
-    }
-    .actions{display:flex; gap:8px; align-items:center}
-    .tiny{font-size:11px; color:var(--muted); line-height:1.5}
-    .foot{
-      margin-top:12px; color:var(--muted); font-size:11px; line-height:1.55
-    }
-    .mono{font-family:var(--mono)}
+    .modal .mh .t{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75ch}
+    .modal .mb{padding:12px; background:#fff; flex:1;}
+    .foot{margin-top:12px;color:var(--muted);font-size:11px;line-height:1.55}
   </style>
 </head>
 
@@ -143,23 +224,21 @@
   <div class="wrap">
     <div class="title-row">
       <div>
-        <h1>Wasm版 libwebp 直叩き：真のWebP Lossy一括圧縮</h1>
-        <p class="subtitle">
-          Canvas.toBlob は使わず、Web Worker + WebAssembly(libwebp) でWebP(Lossy)を強制生成。完全クライアントサイド。
-        </p>
+        <h1>Wasm版 libwebp：真のWebP Lossy（Squoosh風 Compare + Zoom）</h1>
+        <p class="subtitle">Canvas.toBlob を廃止。Web Worker + WebAssembly(libwebp) でWebPを生成し、比較ビューは拡大/移動/スライダー対応。</p>
       </div>
 
       <div class="controls">
         <div class="control">
           <label for="quality">Quality</label>
           <input id="quality" type="range" min="0" max="100" step="1" />
-          <span class="pill mono" id="qualityVal">80</span>
+          <span class="pill" id="qualityVal">80</span>
         </div>
 
         <div class="control">
           <label for="minReduce">最低削減率</label>
           <input id="minReduce" type="range" min="10" max="70" step="1" />
-          <span class="pill mono" id="minReduceVal">10%</span>
+          <span class="pill" id="minReduceVal">10%</span>
         </div>
 
         <button class="btn primary" id="pickBtn">画像を追加</button>
@@ -173,7 +252,7 @@
           <button class="btn" id="themeBtn">STUDIO</button>
         </div>
 
-        <span class="pill mono" id="workerInfo">workers: ?</span>
+        <span class="pill" id="workerInfo">workers: ?</span>
       </div>
     </div>
   </div>
@@ -183,18 +262,18 @@
   <div class="grid">
     <section class="card">
       <div class="card-h">
-        <strong>キュー / プレビュー</strong>
-        <div class="actions">
-          <span class="pill mono" id="queueInfo">0 files</span>
-          <span class="pill mono" id="busyInfo">idle</span>
+        <strong>キュー / 比較プレビュー</strong>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <span class="pill" id="queueInfo">0 files</span>
+          <span class="pill" id="busyInfo">idle</span>
         </div>
       </div>
       <div class="card-b">
         <div id="drop" class="drop" tabindex="0">
           <div class="big">ここに画像をドロップ（または「画像を追加」）</div>
           <div class="small">
-            変換前/後を白背景で左右表示。<br/>
-            WebPのエンコードは <span class="mono">@jsquash/webp</span>（libwebp Wasm）をWeb Workerで実行。
+            比較は <b>スライダー</b> / <b>ホイール拡大</b> / <b>ドラッグ移動</b>。<br/>
+            WebP生成は Worker内で <span style="font-family:var(--mono)">@jsquash/webp (libwebp Wasm)</span> を使用。
           </div>
         </div>
 
@@ -202,8 +281,7 @@
         <div class="list" id="list"></div>
 
         <div class="foot">
-          ※ 目標「削減率90%超」は画像内容依存です（写真系は出やすい / 透過PNGのベタ塗り等は出にくい）。<br/>
-          ただし本ツールは「削減率が指定未満なら Quality を自動で下げて追い込む」ため、Canvas標準エンコーダの“効かないLossy”問題を回避します。
+          操作：ホイール=ズーム / ドラッグ=パン / ダブルクリック=リセット / 「拡大表示」でフルスクリーン比較。
         </div>
       </div>
     </section>
@@ -211,45 +289,59 @@
     <aside class="card">
       <div class="card-h">
         <strong>集計</strong>
-        <span class="pill mono" id="codecInfo">libwebp (Wasm)</span>
+        <span class="pill" id="codecInfo">libwebp (Wasm)</span>
       </div>
       <div class="card-b">
         <div class="stats">
           <div class="stat">
             <div class="k">合計（Before）</div>
-            <div class="v mono" id="sumBefore">0 KB</div>
+            <div class="v" id="sumBefore">0 KB</div>
           </div>
           <div class="stat">
             <div class="k">合計（After）</div>
-            <div class="v mono" id="sumAfter">0 KB</div>
+            <div class="v" id="sumAfter">0 KB</div>
           </div>
           <div class="stat">
             <div class="k">合計削減率</div>
-            <div class="v mono" id="sumReduce">0%</div>
+            <div class="v" id="sumReduce">—</div>
           </div>
           <div class="stat">
-            <div class="k">処理状況</div>
-            <div class="v mono" id="progress">0/0</div>
+            <div class="k">進捗</div>
+            <div class="v" id="progress">0/0</div>
           </div>
         </div>
 
         <div style="height:14px"></div>
-        <div class="tiny">
-          <div class="mono">保存：</div>
-          <div>・Quality / 最低削減率 / Theme は localStorage に記憶</div>
-          <div>・画像は外部送信なし（fetch先なし）</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">
+          <div style="font-family:var(--mono)">localStorage:</div>
+          <div>・Quality / 最低削減率 / Theme を保存</div>
+          <div>・外部送信なし（完全クライアントサイド）</div>
         </div>
       </div>
     </aside>
   </div>
 </main>
 
+<!-- Fullscreen modal -->
+<div class="modal" id="modal">
+  <div class="box">
+    <div class="mh">
+      <div class="t" id="modalTitle">—</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="pill" id="modalMeta">—</span>
+        <button class="btn danger" id="modalClose">閉じる</button>
+      </div>
+    </div>
+    <div class="mb" id="modalBody"></div>
+  </div>
+</div>
+
 <script type="module">
-  // ====== 設定（localStorage） ======
+  // ====== localStorage keys ======
   const LS = {
-    quality: 'wasmwebp_quality',
-    minReduce: 'wasmwebp_minReduce',
-    theme: 'wasmwebp_theme',
+    quality: 'wasmwebp_quality_v2',
+    minReduce: 'wasmwebp_minReduce_v2',
+    theme: 'wasmwebp_theme_v2',
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -277,8 +369,13 @@
   const sumReduceEl = $('#sumReduce');
   const progressEl = $('#progress');
 
-  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const modal = $('#modal');
+  const modalTitle = $('#modalTitle');
+  const modalMeta = $('#modalMeta');
+  const modalBody = $('#modalBody');
+  const modalClose = $('#modalClose');
 
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const loadNum = (k, def) => {
     const v = Number(localStorage.getItem(k));
     return Number.isFinite(v) ? v : def;
@@ -286,35 +383,23 @@
   const loadStr = (k, def) => localStorage.getItem(k) ?? def;
 
   const state = {
-    queue: /** @type {Array<QueueItem>} */ ([]),
+    queue: [],
     running: false,
     done: 0,
     workers: [],
     nextWorker: 0,
-    jobs: new Map(), // jobId -> resolver
+    jobs: new Map(), // jobId -> resolve
   };
 
-  /**
-   * @typedef {{
-   *   id: string;
-   *   file: File;
-   *   beforeUrl: string;
-   *   afterUrl?: string;
-   *   beforeBytes: number;
-   *   afterBytes?: number;
-   *   afterBlob?: Blob;
-   *   qualityUsed?: number;
-   *   reduction?: number; // 0..100
-   *   status: 'queued'|'working'|'done'|'error';
-   *   error?: string;
-   * }} QueueItem
-   */
-
-  function bytesToKB(bytes){
-    return Math.round((bytes / 1024) * 10) / 10;
-  }
-  function pct(n){
-    return Math.round(n * 10) / 10;
+  function bytesToKB(bytes){ return Math.round((bytes / 1024) * 10) / 10; }
+  function pct(n){ return Math.round(n * 10) / 10; }
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'","&#39;");
   }
 
   function setTheme(theme){
@@ -322,14 +407,12 @@
     themeBtn.textContent = theme;
     localStorage.setItem(LS.theme, theme);
   }
-
   function setQuality(q){
     q = clamp(Math.round(q), 0, 100);
     qualityEl.value = String(q);
     qualityValEl.textContent = String(q);
     localStorage.setItem(LS.quality, String(q));
   }
-
   function setMinReduce(p){
     p = clamp(Math.round(p), 10, 70);
     minReduceEl.value = String(p);
@@ -337,19 +420,16 @@
     localStorage.setItem(LS.minReduce, String(p));
   }
 
-  // ====== Worker（Wasm libwebp via @jsquash/webp） ======
-  // Canvas.toBlob は使わない。ピクセル抽出は OffscreenCanvas で ImageData を作り、Wasm encoder に渡す。
-  // 依存はCDNから。@jsquash/webp は libwebp WASM を内部ロードしてencodeする（Squoosh由来）。
+  // ====== Worker (libwebp Wasm via @jsquash/webp) ======
+  // NOTE: esm.sh が環境で詰まるケースがあるので jsDelivr ESM を優先。
   const workerSource = `
-    import { encode as encodeWebP } from "https://esm.sh/@jsquash/webp@1.2.0";
-
-    function bytesToKB(bytes){ return Math.round((bytes/1024)*10)/10; }
+    import { encode as encodeWebP } from "https://cdn.jsdelivr.net/npm/@jsquash/webp@1.2.0/+esm";
 
     async function fileToImageData(arrayBuffer){
       const blob = new Blob([arrayBuffer]);
       const bmp = await createImageBitmap(blob);
       const canvas = new OffscreenCanvas(bmp.width, bmp.height);
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const ctx = canvas.getContext("2d", { willReadFrequently: true, alpha: true });
       ctx.clearRect(0,0,bmp.width,bmp.height);
       ctx.drawImage(bmp, 0, 0);
       const imageData = ctx.getImageData(0,0,bmp.width,bmp.height);
@@ -358,52 +438,40 @@
     }
 
     async function encodeWithFloor(imageData, targetQuality, minReducePct, beforeBytes){
-      // ルール：削減率が minReducePct 未満なら quality を下げて追い込む。
-      // ステップは粗→細（まず-10、後半は-5 / -2）で、最低 0 まで落とす。
-      let q = Math.max(0, Math.min(100, Math.round(targetQuality)));
-      const minReduce = Math.max(0, Math.min(99, Math.round(minReducePct)));
+      // 目標：最低削減率 minReducePct を下回る結果を「合格」にしない。
+      // 戦略：指定qから下げていき、最初に達成したものを採用。達成できない場合は最小サイズ(best)を返すが ok=false。
+      let q0 = Math.max(0, Math.min(100, Math.round(targetQuality)));
+      let minR = Math.max(0, Math.min(99, Math.round(minReducePct)));
 
-      let best = null; // {buf,q,afterBytes,reduce}
+      let best = null; // { buf, q, afterBytes, reduction }
       const tried = new Set();
 
-      const steps = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 98, 99, 100];
-
-      // まず指定qualityから探索
       const plan = [];
-      plan.push(q);
-
-      // 追加探索：落としていく（雑にでも「ゴミ」を排除する）
-      for (let dq = 5; q - dq >= 0; dq += (dq < 20 ? 5 : 10)) {
-        plan.push(q - dq);
-      }
+      plan.push(q0);
+      for (let q = q0 - 5; q >= 0; q -= (q > 40 ? 10 : (q > 20 ? 5 : 2))) plan.push(q);
       plan.push(0);
 
-      // 重複除去しつつ、少ない回数で済むように調整
-      const uniq = [];
-      for (const v of plan){
-        const vv = Math.max(0, Math.min(100, Math.round(v)));
-        if (!tried.has(vv)) { tried.add(vv); uniq.push(vv); }
-      }
+      for (const qq0 of plan){
+        const qq = Math.max(0, Math.min(100, Math.round(qq0)));
+        if (tried.has(qq)) continue;
+        tried.add(qq);
 
-      for (const qq of uniq){
         const buf = await encodeWebP(imageData, { quality: qq });
         const afterBytes = buf.byteLength;
-        const reduce = beforeBytes > 0 ? (1 - (afterBytes / beforeBytes)) * 100 : 0;
+        const reduction = beforeBytes > 0 ? (1 - (afterBytes / beforeBytes)) * 100 : 0;
 
         if (!best || afterBytes < best.afterBytes){
-          best = { buf, q: qq, afterBytes, reduce };
+          best = { buf, q: qq, afterBytes, reduction };
         }
-        if (reduce >= minReduce){
+        if (reduction >= minR){
           return { ok: true, ...best };
         }
       }
-
-      // どうやってもminReduceに届かない場合は「最小サイズ」のbestは返すが ok=false
       return { ok: false, ...best };
     }
 
     self.onmessage = async (e) => {
-      const { jobId, arrayBuffer, fileName, quality, minReducePct, beforeBytes } = e.data;
+      const { jobId, arrayBuffer, quality, minReducePct, beforeBytes } = e.data;
       try{
         const t0 = performance.now();
         const imageData = await fileToImageData(arrayBuffer);
@@ -413,17 +481,17 @@
         const t1 = performance.now();
         self.postMessage({
           jobId,
-          fileName,
           ok: res.ok,
           webpBuffer: res.buf,
           afterBytes: res.afterBytes,
           qualityUsed: res.q,
-          reduction: res.reduce,
+          reduction: res.reduction,
           ms: Math.round((t1 - t0) * 10) / 10,
-          dims: { w: imageData.width, h: imageData.height },
+          w: imageData.width,
+          h: imageData.height,
         }, [res.buf]);
       }catch(err){
-        self.postMessage({ jobId, fileName, ok:false, error: String(err?.message || err) });
+        self.postMessage({ jobId, ok:false, error: String(err?.message || err) });
       }
     };
   `;
@@ -436,16 +504,12 @@
     w.onmessage = (e) => {
       const msg = e.data;
       const resolver = state.jobs.get(msg.jobId);
-      if (resolver) {
-        state.jobs.delete(msg.jobId);
-        resolver(msg);
-      }
+      if (resolver) { state.jobs.delete(msg.jobId); resolver(msg); }
     };
     return w;
   }
 
   function initWorkers(){
-    // 目安：CPU論理コア - 1（最低2、最大8）
     const hc = navigator.hardwareConcurrency || 4;
     const n = clamp(hc - 1, 2, 8);
     state.workers.forEach(w => w.terminate());
@@ -453,13 +517,11 @@
     state.nextWorker = 0;
     workerInfo.textContent = `workers: ${n}`;
   }
-
   function nextWorker(){
     const w = state.workers[state.nextWorker % state.workers.length];
     state.nextWorker++;
     return w;
   }
-
   function callWorker(payload){
     const jobId = crypto.randomUUID();
     const w = nextWorker();
@@ -468,117 +530,296 @@
     return p;
   }
 
-  // ====== UI / Queue ======
-  function render(){
+  // ===== Compare Viewer =====
+  function createCompareViewer({beforeUrl, afterUrl, beforeBytes, afterBytes, reduction, qualityUsed, fileName}){
+    const wrap = document.createElement('div');
+    wrap.className = 'viewer';
+    wrap.tabIndex = 0;
+
+    // structure
+    wrap.innerHTML = `
+      <div class="stage">
+        <div class="layer before"><img alt="before"></div>
+        <div class="afterClip">
+          <div class="layer after"><img alt="after"></div>
+        </div>
+        <div class="divider"></div>
+        <div class="knob"></div>
+      </div>
+
+      <div class="hud">
+        <span><b>Before</b> <span class="mono">${bytesToKB(beforeBytes)} KB</span></span>
+        <span>→</span>
+        <span><b>After</b> <span class="mono">${afterBytes != null ? bytesToKB(afterBytes) : '—'} KB</span></span>
+        <span class="mono" style="margin-left:4px;">|</span>
+        <span><b>削減</b> <span class="mono" data-red>—</span></span>
+        <span class="mono" style="margin-left:4px;">|</span>
+        <span><b>q</b> <span class="mono" data-q>—</span></span>
+        <button type="button" data-zoomout>-</button>
+        <button type="button" data-zoomin>+</button>
+        <button type="button" data-reset>100%</button>
+        <button type="button" data-full>拡大表示</button>
+      </div>
+
+      <div class="hint">ホイール=ズーム / ドラッグ=移動 / スライダー=比較</div>
+    `;
+
+    const imgB = wrap.querySelector('.before img');
+    const imgA = wrap.querySelector('.after img');
+    const clip = wrap.querySelector('.afterClip');
+    const divider = wrap.querySelector('.divider');
+    const knob = wrap.querySelector('.knob');
+    const redEl = wrap.querySelector('[data-red]');
+    const qEl = wrap.querySelector('[data-q]');
+
+    imgB.src = beforeUrl;
+    imgA.src = afterUrl || '';
+    redEl.textContent = (reduction != null) ? `${pct(reduction)}%` : '—';
+    qEl.textContent = (qualityUsed != null) ? String(qualityUsed) : '—';
+
+    // Divider
+    let split = 0.5; // 0..1
+    const applySplit = () => {
+      const w = wrap.clientWidth;
+      const x = Math.round(w * split);
+      clip.style.clipPath = `inset(0 0 0 ${x}px)`;
+      divider.style.left = `${x}px`;
+      knob.style.left = `${x - 16}px`;
+    };
+
+    // Zoom/Pan (sync both layers)
+    let scale = 1;
+    let tx = 0;
+    let ty = 0;
+    let naturalW = 0;
+    let naturalH = 0;
+
+    const beforeLayer = wrap.querySelector('.layer.before');
+    const afterLayer = wrap.querySelector('.layer.after');
+
+    const applyTransform = () => {
+      const t = `translate(${tx}px, ${ty}px) scale(${scale})`;
+      beforeLayer.style.transform = t;
+      afterLayer.style.transform = t;
+    };
+
+    const fitToView = () => {
+      // fit based on loaded image natural size
+      if (!naturalW || !naturalH) return;
+      const vw = wrap.clientWidth;
+      const vh = wrap.clientHeight;
+      // HUD分の高さをざっくり引く（HUDはabsoluteなので本当は不要だが視覚的余白）
+      const pad = 0;
+      const sx = (vw - pad) / naturalW;
+      const sy = (vh - pad) / naturalH;
+      scale = Math.min(sx, sy);
+      // center
+      tx = Math.round((vw - naturalW * scale) / 2);
+      ty = Math.round((vh - naturalH * scale) / 2);
+      applyTransform();
+    };
+
+    const onImgLoad = () => {
+      // before側で基準サイズ
+      naturalW = imgB.naturalWidth || naturalW;
+      naturalH = imgB.naturalHeight || naturalH;
+      fitToView();
+      applySplit();
+    };
+    if (imgB.complete) onImgLoad(); else imgB.addEventListener('load', onImgLoad);
+
+    // Pointer handling (drag pan OR drag slider)
+    let dragging = false;
+    let dragMode = null; // 'pan'|'split'
+    let lastX = 0, lastY = 0;
+
+    const hitSplit = (clientX) => {
+      const r = wrap.getBoundingClientRect();
+      const x = clientX - r.left;
+      const splitX = wrap.clientWidth * split;
+      return Math.abs(x - splitX) <= 18;
+    };
+
+    wrap.addEventListener('pointerdown', (e) => {
+      wrap.setPointerCapture(e.pointerId);
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      dragMode = hitSplit(e.clientX) ? 'split' : 'pan';
+    });
+
+    wrap.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      if (dragMode === 'pan'){
+        tx += dx;
+        ty += dy;
+        applyTransform();
+      } else {
+        const r = wrap.getBoundingClientRect();
+        const x = clamp(e.clientX - r.left, 0, wrap.clientWidth);
+        split = x / wrap.clientWidth;
+        applySplit();
+      }
+    });
+
+    const endDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      dragMode = null;
+      try{ wrap.releasePointerCapture(e.pointerId); }catch{}
+    };
+    wrap.addEventListener('pointerup', endDrag);
+    wrap.addEventListener('pointercancel', endDrag);
+
+    // Wheel zoom (zoom around cursor)
+    wrap.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = wrap.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+
+      const prevScale = scale;
+      const delta = -e.deltaY;
+      const factor = delta > 0 ? 1.08 : 0.92;
+
+      scale = clamp(scale * factor, 0.05, 30);
+
+      // zoom around cursor: adjust tx/ty
+      tx = cx - (cx - tx) * (scale / prevScale);
+      ty = cy - (cy - ty) * (scale / prevScale);
+
+      applyTransform();
+    }, { passive:false });
+
+    // Double click reset
+    wrap.addEventListener('dblclick', () => fitToView());
+
+    // Buttons
+    wrap.querySelector('[data-zoomin]').addEventListener('click', () => {
+      const rect = wrap.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const prev = scale;
+      scale = clamp(scale * 1.2, 0.05, 30);
+      tx = cx - (cx - tx) * (scale / prev);
+      ty = cy - (cy - ty) * (scale / prev);
+      applyTransform();
+    });
+    wrap.querySelector('[data-zoomout]').addEventListener('click', () => {
+      const rect = wrap.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const prev = scale;
+      scale = clamp(scale / 1.2, 0.05, 30);
+      tx = cx - (cx - tx) * (scale / prev);
+      ty = cy - (cy - ty) * (scale / prev);
+      applyTransform();
+    });
+    wrap.querySelector('[data-reset]').addEventListener('click', () => fitToView());
+
+    // Fullscreen modal
+    wrap.querySelector('[data-full]').addEventListener('click', () => {
+      openModalCompare({ beforeUrl, afterUrl, beforeBytes, afterBytes, reduction, qualityUsed, fileName });
+    });
+
+    // Resize handling
+    const ro = new ResizeObserver(() => { applySplit(); fitToView(); });
+    ro.observe(wrap);
+
+    // API to update after encode
+    return {
+      el: wrap,
+      update(after){
+        if (after.afterUrl) imgA.src = after.afterUrl;
+        if (after.afterBytes != null) {
+          wrap.querySelector('.hud .mono').textContent = bytesToKB(beforeBytes) + ' KB'; // first mono is before but ok
+        }
+        redEl.textContent = (after.reduction != null) ? `${pct(after.reduction)}%` : '—';
+        qEl.textContent = (after.qualityUsed != null) ? String(after.qualityUsed) : '—';
+        // HUD after size update
+        const spans = wrap.querySelectorAll('.hud span .mono');
+        // spans[0] = before, spans[1] = after になりがち（構造依存）
+        // 安全に: HUD中の "After" の直後を探す
+        const hud = wrap.querySelector('.hud');
+        const txt = hud.innerHTML; // ignore
+        // 簡易: HUDを作り直さず、表示更新は最低限に留める
+      }
+    };
+  }
+
+  function openModalCompare(data){
+    modal.classList.add('open');
+    modalTitle.textContent = data.fileName || 'preview';
+    const b = (data.beforeBytes != null) ? `${bytesToKB(data.beforeBytes)}KB` : '—';
+    const a = (data.afterBytes != null) ? `${bytesToKB(data.afterBytes)}KB` : '—';
+    const r = (data.reduction != null) ? `${pct(data.reduction)}%` : '—';
+    modalMeta.textContent = `before ${b} → after ${a} | reduction ${r} | q ${data.qualityUsed ?? '—'}`;
+
+    modalBody.innerHTML = '';
+    const v = createCompareViewer(data);
+    // modalは大きいのでfitToViewが走る
+    modalBody.appendChild(v.el);
+  }
+
+  function closeModal(){
+    modal.classList.remove('open');
+    modalBody.innerHTML = '';
+  }
+  modalClose.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+  // ====== Queue + UI ======
+  function setBusy(isBusy){ busyInfo.textContent = isBusy ? 'busy' : 'idle'; }
+
+  function renderTotals(){
     queueInfo.textContent = `${state.queue.length} files`;
     progressEl.textContent = `${state.done}/${state.queue.length}`;
 
-    // totals
     const sumBefore = state.queue.reduce((a, it) => a + (it.beforeBytes || 0), 0);
     const sumAfter = state.queue.reduce((a, it) => a + (it.afterBytes || 0), 0);
+
     sumBeforeEl.textContent = `${bytesToKB(sumBefore)} KB`;
-    sumAfterEl.textContent = `${sumAfter ? bytesToKB(sumAfter) : 0} KB`;
+    sumAfterEl.textContent = `${bytesToKB(sumAfter)} KB`;
 
-    const reduce = sumBefore > 0 && sumAfter > 0 ? (1 - (sumAfter / sumBefore)) * 100 : 0;
-    sumReduceEl.textContent = `${pct(reduce)}%`;
-    sumReduceEl.className = `v mono ${reduce >= 10 ? 'ok' : (sumAfter ? 'bad' : '')}`;
-
-    list.innerHTML = '';
-    for (const it of state.queue){
-      const el = document.createElement('div');
-      el.className = 'item';
-
-      const afterKb = it.afterBytes != null ? `${bytesToKB(it.afterBytes)} KB` : '—';
-      const beforeKb = `${bytesToKB(it.beforeBytes)} KB`;
-      const red = it.reduction != null ? pct(it.reduction) : null;
-
-      const statusTag = (() => {
-        if (it.status === 'queued') return `<span class="tag">queued</span>`;
-        if (it.status === 'working') return `<span class="tag">working</span>`;
-        if (it.status === 'error') return `<span class="tag bad">error</span>`;
-        // done
-        if (red != null && red >= Number(minReduceEl.value)) return `<span class="tag ok">ok</span>`;
-        if (red != null) return `<span class="tag bad">under</span>`;
-        return `<span class="tag">done</span>`;
-      })();
-
-      const redTag = (red == null)
-        ? `<span class="tag">reduction: —</span>`
-        : `<span class="tag ${red >= Number(minReduceEl.value) ? 'ok':'bad'}">reduction: ${red}%</span>`;
-
-      const qTag = it.qualityUsed != null
-        ? `<span class="tag">q: ${it.qualityUsed}</span>`
-        : `<span class="tag">q: —</span>`;
-
-      const dlBtn = it.afterBlob
-        ? `<button class="btn" data-dl="${it.id}">WebP保存</button>`
-        : `<button class="btn" disabled>WebP保存</button>`;
-
-      const rmBtn = `<button class="btn danger" data-rm="${it.id}">削除</button>`;
-
-      el.innerHTML = `
-        <div class="item-h">
-          <div class="name" title="${escapeHtml(it.file.name)}">${escapeHtml(it.file.name)}</div>
-          <div class="meta">
-            ${statusTag}
-            <span class="tag">before: ${beforeKb}</span>
-            <span class="tag">after: ${afterKb}</span>
-            ${redTag}
-            ${qTag}
-            ${dlBtn}
-            ${rmBtn}
-          </div>
-        </div>
-        <div class="item-b">
-          <div class="preview">
-            <div class="ph"><span>Before</span><span class="mono">${beforeKb}</span></div>
-            <img alt="before" src="${it.beforeUrl}">
-          </div>
-          <div class="preview">
-            <div class="ph"><span>After</span><span class="mono">${it.afterBytes != null ? afterKb : '—'}</span></div>
-            <img alt="after" src="${it.afterUrl || ''}">
-          </div>
-        </div>
-      `;
-
-      el.addEventListener('click', (ev) => {
-        const t = /** @type {HTMLElement} */ (ev.target);
-        const dl = t?.getAttribute?.('data-dl');
-        const rm = t?.getAttribute?.('data-rm');
-        if (dl) downloadItem(dl);
-        if (rm) removeItem(rm);
-      });
-
-      list.appendChild(el);
+    if (sumBefore > 0 && sumAfter > 0){
+      const reduce = (1 - (sumAfter / sumBefore)) * 100;
+      sumReduceEl.textContent = `${pct(reduce)}%`;
+      sumReduceEl.className = `v ${reduce >= Number(minReduceEl.value) ? 'ok' : 'bad'}`;
+    } else {
+      sumReduceEl.textContent = '—';
+      sumReduceEl.className = 'v';
     }
-  }
-
-  function escapeHtml(s){
-    return String(s)
-      .replaceAll('&','&amp;')
-      .replaceAll('<','&lt;')
-      .replaceAll('>','&gt;')
-      .replaceAll('"','&quot;')
-      .replaceAll("'","&#39;");
   }
 
   function addFiles(files){
     const arr = Array.from(files || []);
     for (const f of arr){
       if (!f.type.startsWith('image/')) continue;
-
       const id = crypto.randomUUID();
       const beforeUrl = URL.createObjectURL(f);
+
       state.queue.push({
         id,
         file: f,
         beforeUrl,
+        afterUrl: '',
         beforeBytes: f.size,
+        afterBytes: 0,
+        reduction: null,
+        qualityUsed: null,
         status: 'queued',
+        error: '',
+        viewer: null,
       });
     }
-    state.done = state.queue.filter(x => x.status === 'done' || x.status === 'error').length;
-    render();
+    renderList();
+    renderTotals();
   }
 
   function clearAll(){
@@ -588,7 +829,8 @@
     }
     state.queue = [];
     state.done = 0;
-    render();
+    renderList();
+    renderTotals();
   }
 
   function removeItem(id){
@@ -599,7 +841,8 @@
     if (it.afterUrl) { try{ URL.revokeObjectURL(it.afterUrl); }catch{} }
     state.queue.splice(i,1);
     state.done = state.queue.filter(x => x.status === 'done' || x.status === 'error').length;
-    render();
+    renderList();
+    renderTotals();
   }
 
   function downloadItem(id){
@@ -612,14 +855,90 @@
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 800);
   }
 
-  function setBusy(isBusy){
-    busyInfo.textContent = isBusy ? 'busy' : 'idle';
+  function renderList(){
+    list.innerHTML = '';
+    for (const it of state.queue){
+      const el = document.createElement('div');
+      el.className = 'item';
+
+      const beforeKb = `${bytesToKB(it.beforeBytes)} KB`;
+      const afterKb = (it.afterBytes && it.afterUrl) ? `${bytesToKB(it.afterBytes)} KB` : '—';
+      const red = (it.afterBytes && it.afterUrl) ? (1 - (it.afterBytes / it.beforeBytes)) * 100 : null;
+      if (red != null) it.reduction = red;
+
+      const minR = Number(minReduceEl.value);
+      const okReduce = (red != null) ? (red >= minR) : false;
+
+      const statusTag = (() => {
+        if (it.status === 'queued') return `<span class="tag">queued</span>`;
+        if (it.status === 'working') return `<span class="tag">working</span>`;
+        if (it.status === 'done') return `<span class="tag ok">done</span>`;
+        return `<span class="tag bad">error</span>`;
+      })();
+
+      const reduceTag = (red == null)
+        ? `<span class="tag">reduction: —</span>`
+        : `<span class="tag ${okReduce ? 'ok':'bad'}">reduction: ${pct(red)}%</span>`;
+
+      const qTag = it.qualityUsed != null
+        ? `<span class="tag">q: ${it.qualityUsed}</span>`
+        : `<span class="tag">q: —</span>`;
+
+      const msgTag = (it.status === 'error' && it.error)
+        ? `<span class="tag bad" title="${escapeHtml(it.error)}">under/err</span>`
+        : ``;
+
+      const dlDisabled = !it.afterBlob;
+
+      el.innerHTML = `
+        <div class="item-h">
+          <div class="name" title="${escapeHtml(it.file.name)}">${escapeHtml(it.file.name)}</div>
+          <div class="meta">
+            ${statusTag}
+            <span class="tag">before: ${beforeKb}</span>
+            <span class="tag">after: ${afterKb}</span>
+            ${reduceTag}
+            ${qTag}
+            ${msgTag}
+            <button class="btn" ${dlDisabled?'disabled':''} data-dl="${it.id}">WebP保存</button>
+            <button class="btn danger" data-rm="${it.id}">削除</button>
+          </div>
+        </div>
+        <div class="item-b" data-view="${it.id}"></div>
+      `;
+
+      // actions
+      el.addEventListener('click', (ev) => {
+        const t = ev.target;
+        if (!(t instanceof HTMLElement)) return;
+        const dl = t.getAttribute('data-dl');
+        const rm = t.getAttribute('data-rm');
+        if (dl) downloadItem(dl);
+        if (rm) removeItem(rm);
+      });
+
+      // viewer
+      const holder = el.querySelector(`[data-view="${it.id}"]`);
+      const viewer = createCompareViewer({
+        beforeUrl: it.beforeUrl,
+        afterUrl: it.afterUrl || '',
+        beforeBytes: it.beforeBytes,
+        afterBytes: it.afterBytes && it.afterUrl ? it.afterBytes : null,
+        reduction: it.afterBytes && it.afterUrl ? it.reduction : null,
+        qualityUsed: it.qualityUsed,
+        fileName: it.file.name,
+      });
+      it.viewer = viewer;
+      holder.appendChild(viewer.el);
+
+      list.appendChild(el);
+    }
   }
 
-  // ====== 圧縮実行（非ブロッキング：Workerプールで並列） ======
+  // ====== Compression (non-blocking, worker pool) ======
   async function startCompression(){
     if (state.running) return;
     if (state.queue.length === 0) return;
@@ -630,32 +949,31 @@
     const targetQuality = Number(qualityEl.value);
     const minReducePct = Number(minReduceEl.value);
 
-    // queued のみ対象
     const targets = state.queue.filter(x => x.status === 'queued' || x.status === 'error');
-    state.done = state.queue.filter(x => x.status === 'done').length;
-    render();
+    state.done = state.queue.filter(x => x.status === 'done' || x.status === 'error').length;
+    renderTotals();
 
-    // 簡易並列：Promiseのプール
     const concurrency = state.workers.length;
     const pending = targets.slice();
     let active = 0;
 
     await new Promise((resolveAll) => {
-      const pump = async () => {
+      const pump = () => {
         while (active < concurrency && pending.length){
           const it = pending.shift();
           if (!it) break;
+
           active++;
           it.status = 'working';
-          it.error = undefined;
-          render();
+          it.error = '';
+          renderList();
+          renderTotals();
 
           (async () => {
             try{
               const ab = await it.file.arrayBuffer();
               const msg = await callWorker({
                 arrayBuffer: ab,
-                fileName: it.file.name,
                 quality: targetQuality,
                 minReducePct,
                 beforeBytes: it.beforeBytes,
@@ -664,27 +982,25 @@
               if (!msg.ok){
                 it.status = 'error';
                 it.error = msg.error || `削減率が ${minReducePct}% を下回りました（best=${pct(msg.reduction || 0)}%）`;
-                // bestは返ってくる場合があるので、表示だけは更新（ゴミ扱いでbad表示）
               } else {
                 it.status = 'done';
               }
 
-              // best結果は常に適用（ok=falseでも「最小サイズ」を入れる）
               if (msg.webpBuffer){
                 const webpBlob = new Blob([msg.webpBuffer], { type: 'image/webp' });
                 it.afterBlob = webpBlob;
-                it.afterBytes = msg.afterBytes;
-                it.qualityUsed = msg.qualityUsed;
-                it.reduction = msg.reduction;
+                it.afterBytes = msg.afterBytes || 0;
+                it.qualityUsed = msg.qualityUsed ?? null;
+                it.reduction = msg.reduction ?? null;
 
                 if (it.afterUrl) { try{ URL.revokeObjectURL(it.afterUrl); }catch{} }
                 it.afterUrl = URL.createObjectURL(webpBlob);
-              }
 
-              // 10%未満を許さない：ok=false の場合は “error” 扱いで明示（保存ボタンは残すがbad）
-              if (it.status === 'error' && it.afterBytes != null){
-                // 保存を完全禁止したいなら次行を有効化
-                // it.afterBlob = undefined; it.afterUrl = undefined; it.afterBytes = undefined;
+                // viewer update
+                if (it.viewer){
+                  // recreate is safest (hud更新等)
+                  renderList();
+                }
               }
 
             }catch(err){
@@ -693,12 +1009,10 @@
             }finally{
               active--;
               state.done = state.queue.filter(x => x.status === 'done' || x.status === 'error').length;
-              render();
-              if (pending.length) {
-                pump();
-              } else if (active === 0) {
-                resolveAll();
-              }
+              renderList();
+              renderTotals();
+              if (pending.length) pump();
+              else if (active === 0) resolveAll();
             }
           })();
         }
@@ -708,15 +1022,12 @@
 
     state.running = false;
     setBusy(false);
-    render();
+    renderTotals();
   }
 
-  // ====== イベント ======
+  // ====== Events ======
   pickBtn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => {
-    addFiles(fileInput.files);
-    fileInput.value = '';
-  });
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
 
   startBtn.addEventListener('click', startCompression);
   clearBtn.addEventListener('click', clearAll);
@@ -731,37 +1042,25 @@
 
   // drag & drop
   const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, (e) => { stop(e); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, (e) => { stop(e); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', (e) => { const dt = e.dataTransfer; if (dt) addFiles(dt.files); });
 
-  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
-    stop(e);
-    drop.classList.add('drag');
-  }));
-  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, (e) => {
-    stop(e);
-    drop.classList.remove('drag');
-  }));
-  drop.addEventListener('drop', (e) => {
-    const dt = e.dataTransfer;
-    if (!dt) return;
-    addFiles(dt.files);
-  });
-
-  // keyboard: Enter to pick, Ctrl+Enter to start
-  drop.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') fileInput.click();
-  });
+  // keyboard shortcuts
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter') fileInput.click(); });
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') startCompression();
   });
 
-  // ====== 初期化 ======
+  // ====== init ======
   setTheme(loadStr(LS.theme, 'STUDIO'));
   setQuality(loadNum(LS.quality, 80));
   setMinReduce(loadNum(LS.minReduce, 10));
   initWorkers();
-  render();
+  renderList();
+  renderTotals();
 
-  // ====== 破棄処理 ======
+  // ====== cleanup ======
   window.addEventListener('beforeunload', () => {
     try{ state.workers.forEach(w => w.terminate()); }catch{}
     try{
