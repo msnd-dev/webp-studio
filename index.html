@@ -3,53 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebP STUDIO & FREE | Ver 1.0.2</title>
+    <title>WebP STUDIO | Ver 1.0.4</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        :root { --p: #38bdf8; --bg: #020617; --txt: #f8fafc; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--txt); margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        :root { --p: #38bdf8; --bg: #0f172a; --txt: #f8fafc; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--txt); margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; position: relative; }
         
-        /* 社長がすぐ確認できるバージョン表示 */
-        .version-tag {
-            position: absolute; top: 20px; right: 20px;
-            background: var(--p); color: #fff; padding: 5px 15px;
-            border-radius: 50px; font-weight: 900; font-size: 0.9rem;
-            box-shadow: 0 0 15px var(--p);
-        }
+        /* バージョン表記 */
+        .version-tag { position: absolute; top: 20px; right: 20px; background: var(--p); color: #fff; padding: 5px 15px; border-radius: 50px; font-weight: 900; font-size: 0.8rem; box-shadow: 0 0 15px var(--p); z-index: 100; }
 
-        .box { width: 90%; max-width: 480px; background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); padding: 40px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); text-align: center; position: relative; }
+        .box { width: 90%; max-width: 500px; background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(20px); padding: 40px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); text-align: center; position: relative; }
         .sw { background: #000; padding: 4px; border-radius: 12px; display: inline-flex; margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.1); }
-        .sw b { padding: 10px 24px; border-radius: 8px; cursor: pointer; transition: 0.3s; font-size: 0.85rem; font-weight: bold; color: #64748b; }
+        .sw b { padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; color: #64748b; transition: 0.3s; }
         .sw b.act { background: var(--p); color: #fff; }
-        .drop { height: 160px; border: 2px dashed rgba(255,255,255,0.1); border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; margin: 20px 0; background: rgba(255,255,255,0.01); }
+        
+        .drop { height: 140px; border: 2px dashed rgba(255,255,255,0.1); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; margin: 20px 0; background: rgba(255,255,255,0.02); transition: 0.3s; }
         .drop:hover { border-color: var(--p); background: rgba(255,255,255,0.05); }
-        .set { margin-bottom: 20px; font-size: 0.9rem; color: #94a3b8; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 12px; }
-        input { background: none; border: 1px solid var(--p); color: #fff; padding: 4px; width: 50px; border-radius: 5px; text-align: center; font-weight: bold; }
-        .res { display: none; margin-top: 20px; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 15px; border: 1px solid var(--p); }
-        .btn { background: var(--p); color: #fff; border: none; width: 100%; padding: 16px; border-radius: 12px; font-weight: 900; cursor: pointer; margin-top: 10px; }
-        footer { margin-top: 25px; font-size: 0.7rem; color: #475569; }
+        
+        .set { margin-bottom: 20px; font-size: 0.9rem; color: #94a3b8; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 12px; }
+        input { background: none; border: 1px solid var(--p); color: #fff; padding: 4px; width: 60px; border-radius: 6px; text-align: center; font-weight: bold; }
+        
+        .res { display: none; margin-top: 20px; padding: 20px; background: rgba(0,0,0,0.4); border-radius: 16px; border-left: 4px solid var(--p); text-align: left; }
+        .rate { font-size: 2.2rem; font-weight: 900; color: var(--p); margin-bottom: 5px; }
+        .size-line { display: flex; justify-content: space-between; font-family: 'Courier New', monospace; font-size: 0.9rem; color: #94a3b8; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }
+        
+        .btn { background: var(--p); color: #fff; border: none; width: 100%; padding: 16px; border-radius: 12px; font-weight: 900; cursor: pointer; margin-top: 15px; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        
+        footer { margin-top: 30px; font-size: 0.7rem; color: #475569; }
     </style>
 </head>
 <body>
 
-<div class="version-tag">Ver 1.0.2</div>
+<div class="version-tag">Ver 1.0.4</div>
 
 <div class="box">
     <div class="sw">
-        <b id="sB" class="act">WebP作成 (STUDIO)</b>
-        <b id="fB">WebP解除 (FREE)</b>
+        <b id="sB" class="act">WebP 作成 (STUDIO)</b>
+        <b id="fB">WebP 解除 (FREE)</b>
     </div>
-    <h1 id="h" style="margin:0; font-size: 1.6rem;">WebP STUDIO</h1>
+    
+    <h1 id="h" style="margin:0; font-size: 1.6rem; text-align: left; letter-spacing: -1px;">WebP STUDIO</h1>
     
     <div class="drop" id="dz">
-        <span style="font-size: 0.9rem;">ここに画像をドロップ（複数可）</span>
+        <span style="font-size: 0.9rem;">画像をドロップ（複数可）</span>
     </div>
 
     <div class="set">出力画質設定: <input type="number" id="q" value="80"> %</div>
 
     <div id="re" class="res">
-        <div id="st" style="font-size: 1.8rem; font-weight: 900; color: var(--p); margin-bottom: 10px;"></div>
-        <button class="btn" id="dl">ZIPで一括保存</button>
+        <div id="st" class="rate"></div>
+        <div class="size-line">
+            <span>前: <span id="s_before" style="color:#fff"></span></span>
+            <span>➔</span>
+            <span>後: <span id="s_after" style="color:var(--p)"></span></span>
+        </div>
+        <button class="btn" id="dl">ZIPで一括保存する</button>
     </div>
 
     <footer>&copy; 2026 webp.design | msnd-dev</footer>
@@ -62,19 +71,26 @@
     const qi = document.getElementById('q');
     qi.value = q;
 
-    function update(nm) {
+    function fsz(b) {
+        if (b < 1024) return b + ' B';
+        if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+        return (b / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function up(nm) {
         m = nm; localStorage.setItem('v_mode', m);
         const isS = m === 'S';
-        const color = isS ? '#38bdf8' : '#fb923c';
-        document.documentElement.style.setProperty('--p', color);
+        const c = isS ? '#38bdf8' : '#fb923c';
+        document.documentElement.style.setProperty('--p', c);
         document.getElementById('sB').className = isS ? 'act' : '';
         document.getElementById('fB').className = isS ? '' : 'act';
         document.getElementById('h').innerText = isS ? 'WebP STUDIO' : 'WebP FREE';
-        document.body.style.background = isS ? '#020617' : '#0c0400';
+        document.body.style.background = isS ? '#0f172a' : '#0c0400';
     }
-    update(m);
-    document.getElementById('sB').onclick = () => update('S');
-    document.getElementById('fB').onclick = () => update('F');
+    
+    up(m);
+    document.getElementById('sB').onclick = () => up('S');
+    document.getElementById('fB').onclick = () => up('F');
     qi.onchange = () => localStorage.setItem('v_qual', qi.value);
 
     const dz = document.getElementById('dz');
@@ -83,16 +99,20 @@
         e.preventDefault();
         const raw = Array.from(e.dataTransfer.files);
         fs = []; let s1 = 0, s2 = 0;
+        
         for (const f of raw) {
-            const r = await processFile(f);
+            const r = await pr(f);
             fs.push(r); s1 += f.size; s2 += r.blob.size;
         }
+        
         const pct = Math.round((1 - s2/s1) * 100);
         document.getElementById('re').style.display = 'block';
-        document.getElementById('st').innerText = pct > 0 ? `${pct}% 削減成功！` : `最適化済み`;
+        document.getElementById('st').innerText = pct > 0 ? `↓${pct}% 削減` : `最適化済み`;
+        document.getElementById('s_before').innerText = fsz(s1);
+        document.getElementById('s_after').innerText = fsz(s2);
     };
 
-    async function processFile(f) {
+    async function pr(f) {
         return new Promise(res => {
             const rd = new FileReader();
             rd.onload = e => {
