@@ -231,7 +231,6 @@
     .toast.show{display:block}
     .toast .t{font-family:var(--mono);font-size:11px;color:var(--muted)}
     .toast .m{margin-top:6px}
-    .foot{margin-top:12px;color:var(--muted);font-size:11px;line-height:1.55}
   </style>
 </head>
 
@@ -241,9 +240,7 @@
     <div class="title-row">
       <div>
         <h1>Wasm版 libwebp：真のWebP Lossy（Squoosh風 Compare + Zoom）</h1>
-        <p class="subtitle">
-          Canvas.toBlob は使わない。Web Worker + WebAssembly(libwebp) でWebPを生成し、比較は拡大/移動/スライダー対応。
-        </p>
+        <p class="subtitle">Canvas.toBlob は使わない。Worker+WasmでWebP生成。比較は拡大/移動/スライダー。</p>
       </div>
 
       <div class="controls">
@@ -292,24 +289,19 @@
         <div id="drop" class="drop" tabindex="0">
           <div class="big">ここに画像をドロップ（または「画像を追加」）</div>
           <div class="small">
-            操作：ホイール=ズーム / ドラッグ=移動 / スライダー=比較 / ダブルクリック=フィット<br/>
-            エンコード：libwebp(Wasm) を Worker で実行（完全クライアントサイド）
+            操作：ホイール=ズーム / ドラッグ=移動 / スライダー=比較 / ダブルクリック=フィット
           </div>
         </div>
 
         <div style="height:12px"></div>
         <div class="list" id="list"></div>
-
-        <div class="foot">
-          もし error が出たら、各行の赤い「詳細」に理由が出ます（CDN/WASM/Decodeなど）。
-        </div>
       </div>
     </section>
 
     <aside class="card">
       <div class="card-h">
         <strong>集計</strong>
-        <span class="pill" id="codecInfo">libwebp (Wasm)</span>
+        <span class="pill">libwebp (Wasm)</span>
       </div>
       <div class="card-b">
         <div class="stats">
@@ -335,7 +327,6 @@
   </div>
 </main>
 
-<!-- Fullscreen modal -->
 <div class="modal" id="modal">
   <div class="box">
     <div class="mh">
@@ -355,11 +346,10 @@
 </div>
 
 <script type="module">
-  // ========= localStorage =========
   const LS = {
-    quality: 'wasmwebp_quality_final',
-    minReduce: 'wasmwebp_minReduce_final',
-    theme: 'wasmwebp_theme_final',
+    quality: 'wasmwebp_quality_full',
+    minReduce: 'wasmwebp_minReduce_full',
+    theme: 'wasmwebp_theme_full',
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -424,7 +414,7 @@
       .replaceAll('"','&quot;').replaceAll("'","&#39;");
   }
 
-  function showToast(title, msg, ms=9000){
+  function showToast(title, msg, ms=12000){
     toastTitle.textContent = title;
     toastMsg.textContent = msg;
     toast.classList.add('show');
@@ -451,21 +441,37 @@
   }
   function setBusy(isBusy){ busyInfo.textContent = isBusy ? 'busy' : 'idle'; }
 
-  // ========= Worker Source (★ここが今回の核心：壊れないWasmロード) =========
-  // 重要：@jsquash/webp の +esm を使うと WASM の相対パス解決が壊れて 404/MIME事故になる。
-  // なので encode.js を直接 import し、WASM は fetch → init(ArrayBuffer) で手渡しする。
+  // ========= Worker Source（esm.sh bundle + Skypackフォールバックで裸import根絶） =========
   const workerSource = `
     let _encode = null;
     let _inited = false;
 
+    async function importModuleWithFallback(urls){
+      let lastErr = null;
+      for (const u of urls){
+        try{
+          return await import(u);
+        }catch(e){
+          lastErr = e;
+        }
+      }
+      throw lastErr || new Error("import failed");
+    }
+
     async function loadEncoder() {
       if (_encode && _inited) return _encode;
 
-      const MOD_URL = "https://cdn.jsdelivr.net/npm/@jsquash/webp@1.5.0/encode.js";
+      // ★ここが肝：bundleで裸import（wasm-feature-detect等）を解決してしまう
+      // esm.sh が塞がれてる環境用に skypack をフォールバック
+      const MOD_URLS = [
+        "https://esm.sh/@jsquash/webp@1.5.0/encode.js?bundle&target=es2020&no-dts",
+        "https://cdn.skypack.dev/@jsquash/webp@1.5.0/encode.js"
+      ];
+
       const WASM_SIMD_URL = "https://cdn.jsdelivr.net/npm/@jsquash/webp@1.5.0/codec/enc/webp_enc_simd.wasm";
       const WASM_URL      = "https://cdn.jsdelivr.net/npm/@jsquash/webp@1.5.0/codec/enc/webp_enc.wasm";
 
-      const mod = await import(MOD_URL);
+      const mod = await importModuleWithFallback(MOD_URLS);
 
       const encode = mod.default;
       const init = mod.init;
@@ -510,7 +516,7 @@
       if (typeof ImageDecoder === "function"){
         const decoder = new ImageDecoder({ data: blob, type: blob.type });
         const frame = await decoder.decode({ frameIndex: 0 });
-        const { image } = frame; // VideoFrame
+        const { image } = frame;
         const w = image.displayWidth;
         const h = image.displayHeight;
         const canvas = new OffscreenCanvas(w, h);
@@ -561,7 +567,6 @@
     self.onmessage = async (e) => {
       const { jobId, type } = e.data || {};
 
-      // 起動チェック
       if (type === "PING"){
         try{
           await loadEncoder();
@@ -575,10 +580,8 @@
       const { arrayBuffer, quality, minReducePct, beforeBytes } = e.data;
 
       try{
-        const t0 = performance.now();
         const imageData = await decodeToImageData(arrayBuffer);
         const res = await encodeWithFloor(imageData, quality, minReducePct, beforeBytes);
-        const t1 = performance.now();
 
         self.postMessage({
           jobId,
@@ -586,10 +589,7 @@
           webpBuffer: res.buf,
           afterBytes: res.afterBytes,
           qualityUsed: res.q,
-          reduction: res.reduction,
-          ms: Math.round((t1 - t0) * 10) / 10,
-          w: imageData.width,
-          h: imageData.height,
+          reduction: res.reduction
         }, [res.buf]);
       }catch(err){
         self.postMessage({ jobId, ok:false, error:String(err?.message || err) });
@@ -604,7 +604,6 @@
     URL.revokeObjectURL(url);
 
     w.onerror = (e) => {
-      // import失敗など
       state.engineReady = false;
       state.engineErr = `Worker error: ${e.message || e.type || 'unknown'} (line:${e.lineno || '?'})`;
       engineInfo.textContent = 'engine: ERROR';
@@ -1033,7 +1032,7 @@
     if (state.queue.length === 0) return;
 
     if (!state.engineReady){
-      showToast('圧縮できません', 'engine: ERROR です。上の表示と、各行の赤い詳細を見てください。');
+      showToast('圧縮できません', 'engine: ERROR です。トーストの理由を見てください。');
       return;
     }
 
@@ -1118,7 +1117,7 @@
     renderTotals();
   }
 
-  // ====== Events ======
+  // Events
   pickBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
   startBtn.addEventListener('click', startCompression);
@@ -1137,29 +1136,21 @@
   ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, (e) => { stop(e); drop.classList.remove('drag'); }));
   drop.addEventListener('drop', (e) => { const dt = e.dataTransfer; if (dt) addFiles(dt.files); });
 
-  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter') fileInput.click(); });
-  window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') startCompression();
-  });
-
-  // ====== Init ======
+  // Init
   setTheme(loadStr(LS.theme, 'STUDIO'));
   setQuality(loadNum(LS.quality, 80));
   setMinReduce(loadNum(LS.minReduce, 10));
+
   initWorkers();
   renderList();
   renderTotals();
   await checkEngine();
 
-  window.addEventListener('beforeunload', () => {
-    try{ state.workers.forEach(w => w.terminate()); }catch{}
-    try{
-      for (const it of state.queue){
-        URL.revokeObjectURL(it.beforeUrl);
-        if (it.afterUrl) URL.revokeObjectURL(it.afterUrl);
-      }
-    }catch{}
-  });
+  // cache killer notice (手動で ?v=xx を付けるのが面倒なら、このページをブックマークし直す)
+  if (!location.search.includes('v=')) {
+    // ここは「自動リロード」すると嫌がる人がいるので、トーストで促すだけにする
+    showToast('キャッシュ対策', 'GitHub Pagesで更新が反映されない時は、URL末尾に ?v=2 などを付けて開いてください。');
+  }
 </script>
 </body>
 </html>
