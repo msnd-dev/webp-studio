@@ -1,124 +1,777 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebP STUDIO | Ver 1.0.7</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <style>
-        :root { --p: #38bdf8; --bg: #020617; --txt: #f8fafc; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--txt); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-        .version-tag { position: fixed; top: 20px; right: 20px; background: var(--p); color: #fff; padding: 5px 15px; border-radius: 50px; font-weight: 900; font-size: 0.8rem; box-shadow: 0 0 15px var(--p); }
-        .box { width: 100%; max-width: 800px; background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); padding: 30px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
-        
-        /* 左右比較プレビュー (白背景) */
-        .preview-area { display: none; background: #fff; border-radius: 12px; margin: 20px 0; overflow: hidden; border: 2px solid #fff; }
-        .preview-grid { display: grid; grid-template-columns: 1fr 1fr; background: #eee; gap: 1px; }
-        .preview-img { background: #fff; padding: 15px; color: #333; }
-        .preview-img img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-        .label { font-size: 0.7rem; font-weight: 800; color: #94a3b8; margin-bottom: 5px; }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wasm WebP (libwebp) 一括Lossy圧縮ツール</title>
+  <style>
+    :root{
+      --bg:#0b0c10; --fg:#e8eaed; --muted:#aeb4bd; --panel:#12141a;
+      --line:#2a2f3a; --accent:#7aa2ff; --danger:#ff6b6b; --ok:#66e3a2;
+      --white:#ffffff; --shadow: 0 10px 30px rgba(0,0,0,.25);
+      --radius:14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;
+    }
+    [data-theme="FREE"]{
+      --bg:#f6f7fb; --fg:#111318; --muted:#5a6473; --panel:#ffffff;
+      --line:#e5e8ef; --accent:#2b6cff; --danger:#d43c3c; --ok:#0f9d58;
+      --shadow: 0 10px 30px rgba(0,0,0,.08);
+    }
 
-        .sw { background: #000; padding: 4px; border-radius: 12px; display: inline-flex; margin-bottom: 20px; }
-        .sw b { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; color: #64748b; }
-        .sw b.act { background: var(--p); color: #fff; }
-        .drop { height: 120px; border: 2px dashed rgba(255,255,255,0.1); border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(255,255,255,0.01); margin-bottom: 20px; }
-        .set { margin-bottom: 20px; font-size: 0.9rem; color: #94a3b8; }
-        input { background: none; border: 1px solid var(--p); color: #fff; padding: 5px; width: 60px; border-radius: 6px; text-align: center; }
-        .res { display: none; margin-top: 20px; padding: 25px; background: rgba(0,0,0,0.4); border-radius: 20px; border-left: 5px solid var(--p); text-align: left; }
-        .btn { background: var(--p); color: #fff; border: none; width: 100%; padding: 18px; border-radius: 14px; font-weight: 900; cursor: pointer; margin-top: 15px; }
-    </style>
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:var(--sans);
+      background:var(--bg); color:var(--fg);
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      background:linear-gradient(to bottom, rgba(0,0,0,.22), rgba(0,0,0,0));
+      backdrop-filter:saturate(140%) blur(10px);
+      border-bottom:1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    }
+    [data-theme="FREE"] header{
+      background:linear-gradient(to bottom, rgba(255,255,255,.85), rgba(255,255,255,.6));
+    }
+    .wrap{max-width:1180px; margin:0 auto; padding:18px 18px 26px}
+    .title-row{display:flex; gap:12px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap}
+    h1{font-size:18px; margin:0; letter-spacing:.2px}
+    .subtitle{margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.4}
+    .controls{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      padding:10px; border:1px solid var(--line); background:var(--panel);
+      border-radius:var(--radius); box-shadow:var(--shadow);
+    }
+    .control{display:flex; gap:8px; align-items:center}
+    label{font-size:12px; color:var(--muted)}
+    input[type="range"]{width:220px}
+    input[type="file"]{display:none}
+    .btn{
+      appearance:none; border:1px solid var(--line); background:transparent; color:var(--fg);
+      padding:9px 12px; border-radius:12px; cursor:pointer; font-size:12px;
+      display:inline-flex; gap:8px; align-items:center;
+      transition:transform .05s ease, background .15s ease, border-color .15s ease;
+      user-select:none;
+    }
+    .btn:hover{background:color-mix(in srgb, var(--panel) 65%, transparent); border-color:color-mix(in srgb, var(--accent) 30%, var(--line))}
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:color-mix(in srgb, var(--accent) 18%, var(--panel)); border-color:color-mix(in srgb, var(--accent) 40%, var(--line))}
+    .btn.danger{border-color:color-mix(in srgb, var(--danger) 55%, var(--line))}
+    .pill{
+      font-family:var(--mono); font-size:11px; color:var(--muted);
+      padding:6px 8px; border:1px solid var(--line); border-radius:999px;
+    }
+
+    .grid{display:grid; gap:14px; grid-template-columns:1.25fr .75fr; margin-top:14px}
+    @media (max-width: 980px){.grid{grid-template-columns:1fr}}
+
+    .card{
+      border:1px solid var(--line); background:var(--panel); border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .card-h{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:12px 14px; border-bottom:1px solid var(--line);
+    }
+    .card-h strong{font-size:13px}
+    .card-b{padding:14px}
+    .drop{
+      border:2px dashed color-mix(in srgb, var(--line) 80%, var(--muted));
+      border-radius:16px; padding:18px;
+      background:linear-gradient(180deg, color-mix(in srgb, var(--panel) 80%, transparent), transparent);
+      display:flex; flex-direction:column; gap:10px; align-items:center; justify-content:center;
+      min-height:150px;
+    }
+    .drop.drag{border-color:color-mix(in srgb, var(--accent) 65%, var(--line)); background:color-mix(in srgb, var(--accent) 10%, var(--panel))}
+    .drop .big{font-size:13px}
+    .drop .small{font-size:12px; color:var(--muted); text-align:center; line-height:1.5}
+
+    .stats{
+      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    }
+    .stat{
+      border:1px solid var(--line); border-radius:14px; padding:10px 12px; background:color-mix(in srgb, var(--panel) 85%, transparent);
+    }
+    .stat .k{font-size:11px; color:var(--muted)}
+    .stat .v{font-family:var(--mono); font-size:15px; margin-top:6px}
+    .v.ok{color:var(--ok)} .v.bad{color:var(--danger)}
+
+    .list{display:flex; flex-direction:column; gap:10px}
+    .item{
+      border:1px solid var(--line); border-radius:14px; overflow:hidden;
+      background:color-mix(in srgb, var(--panel) 92%, transparent);
+    }
+    .item-h{
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-bottom:1px solid var(--line);
+    }
+    .name{font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:68ch}
+    .meta{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+    .tag{
+      font-family:var(--mono); font-size:11px; color:var(--muted);
+      padding:4px 7px; border:1px solid var(--line); border-radius:999px;
+    }
+    .tag.ok{border-color:color-mix(in srgb, var(--ok) 55%, var(--line)); color:color-mix(in srgb, var(--ok) 80%, var(--fg))}
+    .tag.bad{border-color:color-mix(in srgb, var(--danger) 55%, var(--line)); color:color-mix(in srgb, var(--danger) 80%, var(--fg))}
+    .item-b{
+      padding:12px; background:var(--white);
+      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    }
+    .preview{
+      border:1px solid rgba(0,0,0,.12); border-radius:12px;
+      background:#fff; overflow:hidden;
+    }
+    .preview .ph{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:7px 9px; font-size:11px; color:#374151; background:#f3f4f6; border-bottom:1px solid rgba(0,0,0,.08);
+    }
+    .preview img{
+      display:block; width:100%; height:260px; object-fit:contain; background:#fff;
+    }
+    .actions{display:flex; gap:8px; align-items:center}
+    .tiny{font-size:11px; color:var(--muted); line-height:1.5}
+    .foot{
+      margin-top:12px; color:var(--muted); font-size:11px; line-height:1.55
+    }
+    .mono{font-family:var(--mono)}
+  </style>
 </head>
-<body>
 
-<div class="version-tag">Ver 1.0.7</div>
+<body data-theme="STUDIO">
+<header>
+  <div class="wrap">
+    <div class="title-row">
+      <div>
+        <h1>Wasm版 libwebp 直叩き：真のWebP Lossy一括圧縮</h1>
+        <p class="subtitle">
+          Canvas.toBlob は使わず、Web Worker + WebAssembly(libwebp) でWebP(Lossy)を強制生成。完全クライアントサイド。
+        </p>
+      </div>
 
-<div class="box">
-    <div class="sw">
-        <b id="sB" class="act">WebP 作成 (STUDIO)</b>
-        <b id="fB">WebP 解除 (FREE)</b>
-    </div>
-    
-    <h1 style="margin:0; font-size: 1.5rem; text-align: left;">WebP STUDIO</h1>
-
-    <div class="preview-area" id="pa">
-        <div class="preview-grid">
-            <div class="preview-img"><div class="label">BEFORE</div><img id="img_b"></div>
-            <div class="preview-img"><div class="label">AFTER</div><img id="img_a"></div>
+      <div class="controls">
+        <div class="control">
+          <label for="quality">Quality</label>
+          <input id="quality" type="range" min="0" max="100" step="1" />
+          <span class="pill mono" id="qualityVal">80</span>
         </div>
+
+        <div class="control">
+          <label for="minReduce">最低削減率</label>
+          <input id="minReduce" type="range" min="10" max="70" step="1" />
+          <span class="pill mono" id="minReduceVal">10%</span>
+        </div>
+
+        <button class="btn primary" id="pickBtn">画像を追加</button>
+        <input id="fileInput" type="file" accept="image/*" multiple />
+
+        <button class="btn" id="startBtn">圧縮開始</button>
+        <button class="btn danger" id="clearBtn">全クリア</button>
+
+        <div class="control">
+          <label>Theme</label>
+          <button class="btn" id="themeBtn">STUDIO</button>
+        </div>
+
+        <span class="pill mono" id="workerInfo">workers: ?</span>
+      </div>
     </div>
+  </div>
+</header>
 
-    <div class="drop" id="dz">画像をここにドロップ</div>
-    <div class="set">画質: <input type="number" id="q" value="75"> %</div>
+<main class="wrap">
+  <div class="grid">
+    <section class="card">
+      <div class="card-h">
+        <strong>キュー / プレビュー</strong>
+        <div class="actions">
+          <span class="pill mono" id="queueInfo">0 files</span>
+          <span class="pill mono" id="busyInfo">idle</span>
+        </div>
+      </div>
+      <div class="card-b">
+        <div id="drop" class="drop" tabindex="0">
+          <div class="big">ここに画像をドロップ（または「画像を追加」）</div>
+          <div class="small">
+            変換前/後を白背景で左右表示。<br/>
+            WebPのエンコードは <span class="mono">@jsquash/webp</span>（libwebp Wasm）をWeb Workerで実行。
+          </div>
+        </div>
 
-    <div id="re" class="res">
-        <div id="st" style="font-size: 2.2rem; font-weight: 900; color: var(--p);"></div>
-        <div id="sz" style="font-family: monospace; color: #94a3b8; margin-top: 5px;"></div>
-        <button class="btn" id="dl">一括ダウンロード (.zip)</button>
-    </div>
-</div>
+        <div style="height:12px"></div>
+        <div class="list" id="list"></div>
 
-<script>
-    let m = 'S', q = 75, fs = [];
-    const qi = document.getElementById('q');
+        <div class="foot">
+          ※ 目標「削減率90%超」は画像内容依存です（写真系は出やすい / 透過PNGのベタ塗り等は出にくい）。<br/>
+          ただし本ツールは「削減率が指定未満なら Quality を自動で下げて追い込む」ため、Canvas標準エンコーダの“効かないLossy”問題を回避します。
+        </div>
+      </div>
+    </section>
 
-    function update(nm) {
-        m = nm; const isS = m === 'S';
-        document.documentElement.style.setProperty('--p', isS ? '#38bdf8' : '#fb923c');
-        document.getElementById('sB').className = isS ? 'act' : '';
-        document.getElementById('fB').className = isS ? '' : 'act';
+    <aside class="card">
+      <div class="card-h">
+        <strong>集計</strong>
+        <span class="pill mono" id="codecInfo">libwebp (Wasm)</span>
+      </div>
+      <div class="card-b">
+        <div class="stats">
+          <div class="stat">
+            <div class="k">合計（Before）</div>
+            <div class="v mono" id="sumBefore">0 KB</div>
+          </div>
+          <div class="stat">
+            <div class="k">合計（After）</div>
+            <div class="v mono" id="sumAfter">0 KB</div>
+          </div>
+          <div class="stat">
+            <div class="k">合計削減率</div>
+            <div class="v mono" id="sumReduce">0%</div>
+          </div>
+          <div class="stat">
+            <div class="k">処理状況</div>
+            <div class="v mono" id="progress">0/0</div>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+        <div class="tiny">
+          <div class="mono">保存：</div>
+          <div>・Quality / 最低削減率 / Theme は localStorage に記憶</div>
+          <div>・画像は外部送信なし（fetch先なし）</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script type="module">
+  // ====== 設定（localStorage） ======
+  const LS = {
+    quality: 'wasmwebp_quality',
+    minReduce: 'wasmwebp_minReduce',
+    theme: 'wasmwebp_theme',
+  };
+
+  const $ = (sel) => document.querySelector(sel);
+
+  const qualityEl = $('#quality');
+  const qualityValEl = $('#qualityVal');
+  const minReduceEl = $('#minReduce');
+  const minReduceValEl = $('#minReduceVal');
+
+  const pickBtn = $('#pickBtn');
+  const fileInput = $('#fileInput');
+  const startBtn = $('#startBtn');
+  const clearBtn = $('#clearBtn');
+  const themeBtn = $('#themeBtn');
+
+  const drop = $('#drop');
+  const list = $('#list');
+
+  const queueInfo = $('#queueInfo');
+  const busyInfo = $('#busyInfo');
+  const workerInfo = $('#workerInfo');
+
+  const sumBeforeEl = $('#sumBefore');
+  const sumAfterEl = $('#sumAfter');
+  const sumReduceEl = $('#sumReduce');
+  const progressEl = $('#progress');
+
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+  const loadNum = (k, def) => {
+    const v = Number(localStorage.getItem(k));
+    return Number.isFinite(v) ? v : def;
+  };
+  const loadStr = (k, def) => localStorage.getItem(k) ?? def;
+
+  const state = {
+    queue: /** @type {Array<QueueItem>} */ ([]),
+    running: false,
+    done: 0,
+    workers: [],
+    nextWorker: 0,
+    jobs: new Map(), // jobId -> resolver
+  };
+
+  /**
+   * @typedef {{
+   *   id: string;
+   *   file: File;
+   *   beforeUrl: string;
+   *   afterUrl?: string;
+   *   beforeBytes: number;
+   *   afterBytes?: number;
+   *   afterBlob?: Blob;
+   *   qualityUsed?: number;
+   *   reduction?: number; // 0..100
+   *   status: 'queued'|'working'|'done'|'error';
+   *   error?: string;
+   * }} QueueItem
+   */
+
+  function bytesToKB(bytes){
+    return Math.round((bytes / 1024) * 10) / 10;
+  }
+  function pct(n){
+    return Math.round(n * 10) / 10;
+  }
+
+  function setTheme(theme){
+    document.body.setAttribute('data-theme', theme);
+    themeBtn.textContent = theme;
+    localStorage.setItem(LS.theme, theme);
+  }
+
+  function setQuality(q){
+    q = clamp(Math.round(q), 0, 100);
+    qualityEl.value = String(q);
+    qualityValEl.textContent = String(q);
+    localStorage.setItem(LS.quality, String(q));
+  }
+
+  function setMinReduce(p){
+    p = clamp(Math.round(p), 10, 70);
+    minReduceEl.value = String(p);
+    minReduceValEl.textContent = `${p}%`;
+    localStorage.setItem(LS.minReduce, String(p));
+  }
+
+  // ====== Worker（Wasm libwebp via @jsquash/webp） ======
+  // Canvas.toBlob は使わない。ピクセル抽出は OffscreenCanvas で ImageData を作り、Wasm encoder に渡す。
+  // 依存はCDNから。@jsquash/webp は libwebp WASM を内部ロードしてencodeする（Squoosh由来）。
+  const workerSource = `
+    import { encode as encodeWebP } from "https://esm.sh/@jsquash/webp@1.2.0";
+
+    function bytesToKB(bytes){ return Math.round((bytes/1024)*10)/10; }
+
+    async function fileToImageData(arrayBuffer){
+      const blob = new Blob([arrayBuffer]);
+      const bmp = await createImageBitmap(blob);
+      const canvas = new OffscreenCanvas(bmp.width, bmp.height);
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.clearRect(0,0,bmp.width,bmp.height);
+      ctx.drawImage(bmp, 0, 0);
+      const imageData = ctx.getImageData(0,0,bmp.width,bmp.height);
+      bmp.close?.();
+      return imageData;
     }
-    document.getElementById('sB').onclick = () => update('S');
-    document.getElementById('fB').onclick = () => update('F');
 
-    const dz = document.getElementById('dz');
-    dz.ondragover = e => { e.preventDefault(); dz.style.borderColor = 'var(--p)'; };
-    dz.ondrop = async e => {
-        e.preventDefault();
-        const raw = Array.from(e.dataTransfer.files);
-        fs = []; let s1 = 0, s2 = 0;
-        
-        // プレビュー用に1枚目を取得
-        document.getElementById('img_b').src = URL.createObjectURL(raw[0]);
+    async function encodeWithFloor(imageData, targetQuality, minReducePct, beforeBytes){
+      // ルール：削減率が minReducePct 未満なら quality を下げて追い込む。
+      // ステップは粗→細（まず-10、後半は-5 / -2）で、最低 0 まで落とす。
+      let q = Math.max(0, Math.min(100, Math.round(targetQuality)));
+      const minReduce = Math.max(0, Math.min(99, Math.round(minReducePct)));
 
-        for (const f of raw) {
-            const r = await process(f);
-            fs.push(r); s1 += f.size; s2 += r.blob.size;
-            if(f === raw[0]) document.getElementById('img_a').src = URL.createObjectURL(r.blob);
+      let best = null; // {buf,q,afterBytes,reduce}
+      const tried = new Set();
+
+      const steps = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 98, 99, 100];
+
+      // まず指定qualityから探索
+      const plan = [];
+      plan.push(q);
+
+      // 追加探索：落としていく（雑にでも「ゴミ」を排除する）
+      for (let dq = 5; q - dq >= 0; dq += (dq < 20 ? 5 : 10)) {
+        plan.push(q - dq);
+      }
+      plan.push(0);
+
+      // 重複除去しつつ、少ない回数で済むように調整
+      const uniq = [];
+      for (const v of plan){
+        const vv = Math.max(0, Math.min(100, Math.round(v)));
+        if (!tried.has(vv)) { tried.add(vv); uniq.push(vv); }
+      }
+
+      for (const qq of uniq){
+        const buf = await encodeWebP(imageData, { quality: qq });
+        const afterBytes = buf.byteLength;
+        const reduce = beforeBytes > 0 ? (1 - (afterBytes / beforeBytes)) * 100 : 0;
+
+        if (!best || afterBytes < best.afterBytes){
+          best = { buf, q: qq, afterBytes, reduce };
         }
+        if (reduce >= minReduce){
+          return { ok: true, ...best };
+        }
+      }
 
-        const pct = Math.round((1 - s2/s1) * 100);
-        document.getElementById('pa').style.display = 'block';
-        document.getElementById('re').style.display = 'block';
-        document.getElementById('st').innerText = `SAVED ${pct}%`;
-        document.getElementById('sz').innerText = `${(s1/1024).toFixed(1)}KB ➔ ${(s2/1024).toFixed(1)}KB`;
-    };
-
-    async function process(f) {
-        return new Promise(res => {
-            const rd = new FileReader();
-            rd.onload = e => {
-                const i = new Image();
-                i.onload = () => {
-                    const c = document.createElement('canvas');
-                    c.width = i.width; c.height = i.height;
-                    const ctx = c.getContext('2d');
-                    ctx.drawImage(i, 0, 0);
-                    // ここで強制的に指定画質のWebPへ圧縮
-                    c.toBlob(b => res({name: f.name.split('.')[0] + (m==='S'?'.webp':'.jpg'), blob: b}), m==='S'?'image/webp':'image/jpeg', qi.value/100);
-                };
-                i.src = e.target.result;
-            };
-            rd.readAsDataURL(f);
-        });
+      // どうやってもminReduceに届かない場合は「最小サイズ」のbestは返すが ok=false
+      return { ok: false, ...best };
     }
 
-    document.getElementById('dl').onclick = async () => {
-        const z = new JSZip();
-        fs.forEach(f => z.file(f.name, f.blob));
-        const b = await z.generateAsync({type:"blob"});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(b); a.download = `webp_design_export.zip`; a.click();
+    self.onmessage = async (e) => {
+      const { jobId, arrayBuffer, fileName, quality, minReducePct, beforeBytes } = e.data;
+      try{
+        const t0 = performance.now();
+        const imageData = await fileToImageData(arrayBuffer);
+
+        const res = await encodeWithFloor(imageData, quality, minReducePct, beforeBytes);
+
+        const t1 = performance.now();
+        self.postMessage({
+          jobId,
+          fileName,
+          ok: res.ok,
+          webpBuffer: res.buf,
+          afterBytes: res.afterBytes,
+          qualityUsed: res.q,
+          reduction: res.reduce,
+          ms: Math.round((t1 - t0) * 10) / 10,
+          dims: { w: imageData.width, h: imageData.height },
+        }, [res.buf]);
+      }catch(err){
+        self.postMessage({ jobId, fileName, ok:false, error: String(err?.message || err) });
+      }
     };
+  `;
+
+  function createWorker(){
+    const blob = new Blob([workerSource], { type: 'text/javascript' });
+    const url = URL.createObjectURL(blob);
+    const w = new Worker(url, { type: 'module' });
+    URL.revokeObjectURL(url);
+    w.onmessage = (e) => {
+      const msg = e.data;
+      const resolver = state.jobs.get(msg.jobId);
+      if (resolver) {
+        state.jobs.delete(msg.jobId);
+        resolver(msg);
+      }
+    };
+    return w;
+  }
+
+  function initWorkers(){
+    // 目安：CPU論理コア - 1（最低2、最大8）
+    const hc = navigator.hardwareConcurrency || 4;
+    const n = clamp(hc - 1, 2, 8);
+    state.workers.forEach(w => w.terminate());
+    state.workers = Array.from({length:n}, () => createWorker());
+    state.nextWorker = 0;
+    workerInfo.textContent = `workers: ${n}`;
+  }
+
+  function nextWorker(){
+    const w = state.workers[state.nextWorker % state.workers.length];
+    state.nextWorker++;
+    return w;
+  }
+
+  function callWorker(payload){
+    const jobId = crypto.randomUUID();
+    const w = nextWorker();
+    const p = new Promise((resolve) => state.jobs.set(jobId, resolve));
+    w.postMessage({ jobId, ...payload }, [payload.arrayBuffer]);
+    return p;
+  }
+
+  // ====== UI / Queue ======
+  function render(){
+    queueInfo.textContent = `${state.queue.length} files`;
+    progressEl.textContent = `${state.done}/${state.queue.length}`;
+
+    // totals
+    const sumBefore = state.queue.reduce((a, it) => a + (it.beforeBytes || 0), 0);
+    const sumAfter = state.queue.reduce((a, it) => a + (it.afterBytes || 0), 0);
+    sumBeforeEl.textContent = `${bytesToKB(sumBefore)} KB`;
+    sumAfterEl.textContent = `${sumAfter ? bytesToKB(sumAfter) : 0} KB`;
+
+    const reduce = sumBefore > 0 && sumAfter > 0 ? (1 - (sumAfter / sumBefore)) * 100 : 0;
+    sumReduceEl.textContent = `${pct(reduce)}%`;
+    sumReduceEl.className = `v mono ${reduce >= 10 ? 'ok' : (sumAfter ? 'bad' : '')}`;
+
+    list.innerHTML = '';
+    for (const it of state.queue){
+      const el = document.createElement('div');
+      el.className = 'item';
+
+      const afterKb = it.afterBytes != null ? `${bytesToKB(it.afterBytes)} KB` : '—';
+      const beforeKb = `${bytesToKB(it.beforeBytes)} KB`;
+      const red = it.reduction != null ? pct(it.reduction) : null;
+
+      const statusTag = (() => {
+        if (it.status === 'queued') return `<span class="tag">queued</span>`;
+        if (it.status === 'working') return `<span class="tag">working</span>`;
+        if (it.status === 'error') return `<span class="tag bad">error</span>`;
+        // done
+        if (red != null && red >= Number(minReduceEl.value)) return `<span class="tag ok">ok</span>`;
+        if (red != null) return `<span class="tag bad">under</span>`;
+        return `<span class="tag">done</span>`;
+      })();
+
+      const redTag = (red == null)
+        ? `<span class="tag">reduction: —</span>`
+        : `<span class="tag ${red >= Number(minReduceEl.value) ? 'ok':'bad'}">reduction: ${red}%</span>`;
+
+      const qTag = it.qualityUsed != null
+        ? `<span class="tag">q: ${it.qualityUsed}</span>`
+        : `<span class="tag">q: —</span>`;
+
+      const dlBtn = it.afterBlob
+        ? `<button class="btn" data-dl="${it.id}">WebP保存</button>`
+        : `<button class="btn" disabled>WebP保存</button>`;
+
+      const rmBtn = `<button class="btn danger" data-rm="${it.id}">削除</button>`;
+
+      el.innerHTML = `
+        <div class="item-h">
+          <div class="name" title="${escapeHtml(it.file.name)}">${escapeHtml(it.file.name)}</div>
+          <div class="meta">
+            ${statusTag}
+            <span class="tag">before: ${beforeKb}</span>
+            <span class="tag">after: ${afterKb}</span>
+            ${redTag}
+            ${qTag}
+            ${dlBtn}
+            ${rmBtn}
+          </div>
+        </div>
+        <div class="item-b">
+          <div class="preview">
+            <div class="ph"><span>Before</span><span class="mono">${beforeKb}</span></div>
+            <img alt="before" src="${it.beforeUrl}">
+          </div>
+          <div class="preview">
+            <div class="ph"><span>After</span><span class="mono">${it.afterBytes != null ? afterKb : '—'}</span></div>
+            <img alt="after" src="${it.afterUrl || ''}">
+          </div>
+        </div>
+      `;
+
+      el.addEventListener('click', (ev) => {
+        const t = /** @type {HTMLElement} */ (ev.target);
+        const dl = t?.getAttribute?.('data-dl');
+        const rm = t?.getAttribute?.('data-rm');
+        if (dl) downloadItem(dl);
+        if (rm) removeItem(rm);
+      });
+
+      list.appendChild(el);
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'","&#39;");
+  }
+
+  function addFiles(files){
+    const arr = Array.from(files || []);
+    for (const f of arr){
+      if (!f.type.startsWith('image/')) continue;
+
+      const id = crypto.randomUUID();
+      const beforeUrl = URL.createObjectURL(f);
+      state.queue.push({
+        id,
+        file: f,
+        beforeUrl,
+        beforeBytes: f.size,
+        status: 'queued',
+      });
+    }
+    state.done = state.queue.filter(x => x.status === 'done' || x.status === 'error').length;
+    render();
+  }
+
+  function clearAll(){
+    for (const it of state.queue){
+      try{ URL.revokeObjectURL(it.beforeUrl); }catch{}
+      if (it.afterUrl) { try{ URL.revokeObjectURL(it.afterUrl); }catch{} }
+    }
+    state.queue = [];
+    state.done = 0;
+    render();
+  }
+
+  function removeItem(id){
+    const i = state.queue.findIndex(x => x.id === id);
+    if (i < 0) return;
+    const it = state.queue[i];
+    try{ URL.revokeObjectURL(it.beforeUrl); }catch{}
+    if (it.afterUrl) { try{ URL.revokeObjectURL(it.afterUrl); }catch{} }
+    state.queue.splice(i,1);
+    state.done = state.queue.filter(x => x.status === 'done' || x.status === 'error').length;
+    render();
+  }
+
+  function downloadItem(id){
+    const it = state.queue.find(x => x.id === id);
+    if (!it?.afterBlob) return;
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(it.afterBlob);
+    a.href = url;
+    a.download = it.file.name.replace(/\.[^.]+$/, '') + `.q${it.qualityUsed ?? qualityEl.value}.webp`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function setBusy(isBusy){
+    busyInfo.textContent = isBusy ? 'busy' : 'idle';
+  }
+
+  // ====== 圧縮実行（非ブロッキング：Workerプールで並列） ======
+  async function startCompression(){
+    if (state.running) return;
+    if (state.queue.length === 0) return;
+
+    state.running = true;
+    setBusy(true);
+
+    const targetQuality = Number(qualityEl.value);
+    const minReducePct = Number(minReduceEl.value);
+
+    // queued のみ対象
+    const targets = state.queue.filter(x => x.status === 'queued' || x.status === 'error');
+    state.done = state.queue.filter(x => x.status === 'done').length;
+    render();
+
+    // 簡易並列：Promiseのプール
+    const concurrency = state.workers.length;
+    const pending = targets.slice();
+    let active = 0;
+
+    await new Promise((resolveAll) => {
+      const pump = async () => {
+        while (active < concurrency && pending.length){
+          const it = pending.shift();
+          if (!it) break;
+          active++;
+          it.status = 'working';
+          it.error = undefined;
+          render();
+
+          (async () => {
+            try{
+              const ab = await it.file.arrayBuffer();
+              const msg = await callWorker({
+                arrayBuffer: ab,
+                fileName: it.file.name,
+                quality: targetQuality,
+                minReducePct,
+                beforeBytes: it.beforeBytes,
+              });
+
+              if (!msg.ok){
+                it.status = 'error';
+                it.error = msg.error || `削減率が ${minReducePct}% を下回りました（best=${pct(msg.reduction || 0)}%）`;
+                // bestは返ってくる場合があるので、表示だけは更新（ゴミ扱いでbad表示）
+              } else {
+                it.status = 'done';
+              }
+
+              // best結果は常に適用（ok=falseでも「最小サイズ」を入れる）
+              if (msg.webpBuffer){
+                const webpBlob = new Blob([msg.webpBuffer], { type: 'image/webp' });
+                it.afterBlob = webpBlob;
+                it.afterBytes = msg.afterBytes;
+                it.qualityUsed = msg.qualityUsed;
+                it.reduction = msg.reduction;
+
+                if (it.afterUrl) { try{ URL.revokeObjectURL(it.afterUrl); }catch{} }
+                it.afterUrl = URL.createObjectURL(webpBlob);
+              }
+
+              // 10%未満を許さない：ok=false の場合は “error” 扱いで明示（保存ボタンは残すがbad）
+              if (it.status === 'error' && it.afterBytes != null){
+                // 保存を完全禁止したいなら次行を有効化
+                // it.afterBlob = undefined; it.afterUrl = undefined; it.afterBytes = undefined;
+              }
+
+            }catch(err){
+              it.status = 'error';
+              it.error = String(err?.message || err);
+            }finally{
+              active--;
+              state.done = state.queue.filter(x => x.status === 'done' || x.status === 'error').length;
+              render();
+              if (pending.length) {
+                pump();
+              } else if (active === 0) {
+                resolveAll();
+              }
+            }
+          })();
+        }
+      };
+      pump();
+    });
+
+    state.running = false;
+    setBusy(false);
+    render();
+  }
+
+  // ====== イベント ======
+  pickBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    addFiles(fileInput.files);
+    fileInput.value = '';
+  });
+
+  startBtn.addEventListener('click', startCompression);
+  clearBtn.addEventListener('click', clearAll);
+
+  qualityEl.addEventListener('input', () => setQuality(Number(qualityEl.value)));
+  minReduceEl.addEventListener('input', () => setMinReduce(Number(minReduceEl.value)));
+
+  themeBtn.addEventListener('click', () => {
+    const now = document.body.getAttribute('data-theme') || 'STUDIO';
+    setTheme(now === 'STUDIO' ? 'FREE' : 'STUDIO');
+  });
+
+  // drag & drop
+  const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
+    stop(e);
+    drop.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, (e) => {
+    stop(e);
+    drop.classList.remove('drag');
+  }));
+  drop.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    addFiles(dt.files);
+  });
+
+  // keyboard: Enter to pick, Ctrl+Enter to start
+  drop.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') fileInput.click();
+  });
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') startCompression();
+  });
+
+  // ====== 初期化 ======
+  setTheme(loadStr(LS.theme, 'STUDIO'));
+  setQuality(loadNum(LS.quality, 80));
+  setMinReduce(loadNum(LS.minReduce, 10));
+  initWorkers();
+  render();
+
+  // ====== 破棄処理 ======
+  window.addEventListener('beforeunload', () => {
+    try{ state.workers.forEach(w => w.terminate()); }catch{}
+    try{
+      for (const it of state.queue){
+        URL.revokeObjectURL(it.beforeUrl);
+        if (it.afterUrl) URL.revokeObjectURL(it.afterUrl);
+      }
+    }catch{}
+  });
 </script>
+
 </body>
 </html>
